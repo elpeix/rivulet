@@ -1,0 +1,29 @@
+[package]
+name = "rivulet"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-only"
+
+[dependencies]
+ratatui = "0.30"
+crossterm = "0.29"
+tokio = { version = "1.39", features = [
+  "rt-multi-thread",
+  "macros",
+  "time",
+  "sync",
+] }
+reqwest = { version = "0.13", default-features = false, features = [
+  "rustls",
+  "http2",
+  "gzip",
+] }
+bytes = "1.6"
+feed-rs = "2.3.1"
+rusqlite = { version = "0.38", features = ["bundled"] }
+html2text = "0.16"
+clap = { version = "4.5", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.8"
+time = { version = "0.3", features = ["formatting", "parsing"] }
+dirs = "6.0.0"
