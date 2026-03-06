@@ -478,8 +478,6 @@ impl App {
 
         self.state.refreshing = true;
         info!("Refreshing {} feeds", self.state.feeds.len());
-        self.state
-            .reduce(Action::SetStatus(self.lang.refreshing.to_string()));
 
         let feeds: Arc<Vec<Feed>> = Arc::new(self.state.feeds.clone());
 

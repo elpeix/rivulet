@@ -401,9 +401,7 @@ pub fn status_bar<'a>(
         vec![Line::from(left_spans), Line::from(right_spans)]
     };
 
-    Paragraph::new(lines)
-        .block(Block::default().borders(Borders::TOP))
-        .style(Style::default().fg(theme.text).bg(theme.header_bg))
+    Paragraph::new(lines).style(Style::default().fg(theme.text).bg(theme.header_bg))
 }
 
 fn fits_single_line(left_width: usize, right_width: usize, available: usize) -> bool {
@@ -453,9 +451,9 @@ pub fn status_bar_height(state: &AppState, recent_days: i64, lang: &Lang, width:
 
     let available = width.saturating_sub(2) as usize;
     if fits_single_line(left_w, right_w, available) {
-        2
+        1
     } else {
-        3
+        2
     }
 }
 
