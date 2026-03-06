@@ -7,7 +7,7 @@ use crate::ui;
 use crate::util::open::open_url;
 
 pub fn handle_mouse(app: &mut App, event: MouseEvent, area: ratatui::layout::Rect) {
-    let layout = ui::layout::layout_chunks(area, app.state.panel_ratios);
+    let layout = ui::layout::layout_chunks(area, app.state.panel_ratios, 2);
     let (x, y) = (event.column, event.row);
 
     match event.kind {

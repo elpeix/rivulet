@@ -112,7 +112,6 @@ pub struct Lang {
     // Header
     pub app_name: &'static str,
     pub feed_label: &'static str,
-    pub focus_label: &'static str,
     pub filter_label: &'static str,
     pub search_label: &'static str,
 }
@@ -226,7 +225,6 @@ impl Lang {
 
             app_name: "Rivulet",
             feed_label: "Feed: ",
-            focus_label: "Focus: ",
             filter_label: "Filter: ",
             search_label: "Search: ",
         }
@@ -333,7 +331,6 @@ impl Lang {
 
             app_name: "Rivulet",
             feed_label: "Font: ",
-            focus_label: "Focus: ",
             filter_label: "Filtre: ",
             search_label: "Cerca: ",
         }

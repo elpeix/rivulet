@@ -16,8 +16,8 @@ use crate::i18n::Lang;
 use crate::ui::layout::{centered_rect, layout_chunks};
 use crate::ui::theme::Theme;
 use crate::ui::widgets::{
-    assign_group_modal_text, entries_list, feeds_list, header_bar, manage_groups_modal_text, modal,
-    panel_block, preview_block, preview_parts, selected_entry, status_bar,
+    assign_group_modal_text, entries_list, feeds_list, manage_groups_modal_text, modal,
+    panel_block, preview_block, preview_parts, selected_entry, status_bar, status_bar_height,
 };
 
 #[derive(Debug, Clone)]
@@ -55,16 +55,15 @@ pub fn draw(
     recent_days: i64,
     lang: &Lang,
 ) {
-    let layout = layout_chunks(frame.area(), state.panel_ratios);
-
-    let header = header_bar(state, theme, recent_days, lang);
-    frame.render_widget(header, layout.header);
+    let area = frame.area();
+    let sh = status_bar_height(state, recent_days, lang, area.width);
+    let layout = layout_chunks(area, state.panel_ratios, sh);
 
     draw_feeds_panel(frame, state, theme, layout.columns[0], lang);
     draw_entries_panel(frame, state, theme, layout.columns[1], lang);
     draw_preview_panel(frame, state, theme, layout.columns[2], lang);
 
-    let status = status_bar(state, theme, lang);
+    let status = status_bar(state, theme, recent_days, lang, area.width);
     frame.render_widget(status, layout.status);
 
     if let Some(modal_state) = modal_state {
