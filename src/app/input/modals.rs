@@ -56,6 +56,17 @@ pub fn handle_input_mode(app: &mut App, key: KeyEvent) -> bool {
         InputMode::DeleteGroup { group_id } => {
             return handle_delete_group(app, key, group_id);
         }
+        InputMode::SelectDiscoveredFeed { feeds, group_id } => {
+            return handle_select_discovered_feed(app, key, &feeds, group_id);
+        }
+        InputMode::Discovering => {
+            if key.code == KeyCode::Esc {
+                app.cancel_discovery();
+                let _ = app.dispatch(Action::ClearStatus);
+                return true;
+            }
+            return false;
+        }
         _ => {}
     }
 
@@ -367,6 +378,42 @@ fn update_text_status(app: &mut App, mode: &InputMode) {
     let _ = app.dispatch(Action::SetStatus(prompt));
 }
 
+fn handle_select_discovered_feed(
+    app: &mut App,
+    key: KeyEvent,
+    feeds: &[crate::fetch::discovery::DiscoveredFeed],
+    group_id: Option<i64>,
+) -> bool {
+    match key.code {
+        KeyCode::Esc => {
+            let _ = app.dispatch(Action::ClearStatus);
+            return true;
+        }
+        KeyCode::Up | KeyCode::Char('k') => {
+            if app.state.modal_selection > 0 {
+                app.state.modal_selection -= 1;
+            }
+        }
+        KeyCode::Down | KeyCode::Char('j') => {
+            if app.state.modal_selection + 1 < feeds.len() {
+                app.state.modal_selection += 1;
+            }
+        }
+        KeyCode::Enter => {
+            if let Some(feed) = feeds.get(app.state.modal_selection) {
+                let _ = app.dispatch(Action::AddDiscoveredFeed {
+                    url: feed.url.clone(),
+                    group_id,
+                });
+            }
+            let _ = app.dispatch(Action::ClearStatus);
+            return true;
+        }
+        _ => {}
+    }
+    false
+}
+
 fn handle_delete_group(app: &mut App, key: KeyEvent, group_id: i64) -> bool {
     match key.code {
         KeyCode::Char('y' | 'Y') => {
@@ -432,6 +479,11 @@ pub fn current_modal(state: &AppState, lang: &Lang) -> Option<ui::Modal> {
         InputMode::RenameGroup => Some(ui::Modal::GroupInput {
             title: lang.rename_category.to_string(),
             value: state.input_buffer.clone(),
+        }),
+        InputMode::Discovering => Some(ui::Modal::Discovering),
+        InputMode::SelectDiscoveredFeed { feeds, .. } => Some(ui::Modal::SelectDiscoveredFeed {
+            feeds: feeds.clone(),
+            selection: state.modal_selection,
         }),
         InputMode::None => None,
     }

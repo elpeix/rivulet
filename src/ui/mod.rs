@@ -12,6 +12,7 @@ use ratatui::widgets::{
 };
 
 use crate::app::state::AppState;
+use crate::fetch::discovery::DiscoveredFeed;
 use crate::i18n::Lang;
 use crate::ui::layout::{centered_rect, layout_chunks};
 use crate::ui::theme::Theme;
@@ -44,6 +45,11 @@ pub enum Modal {
     GroupInput {
         title: String,
         value: String,
+    },
+    Discovering,
+    SelectDiscoveredFeed {
+        feeds: Vec<DiscoveredFeed>,
+        selection: usize,
     },
 }
 
@@ -325,6 +331,52 @@ fn draw_modal(
         }
         Modal::Help { scroll } => {
             draw_help_modal(frame, theme, area, scroll, lang);
+        }
+        Modal::Discovering => {
+            let spinner = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+            let frame_char = spinner[state.tick % spinner.len()];
+            let text = Text::from(vec![
+                Line::from(""),
+                Line::from(vec![
+                    Span::styled(
+                        format!("{frame_char} "),
+                        Style::default().fg(theme.accent_alt),
+                    ),
+                    Span::raw(lang.discovering),
+                ]),
+            ]);
+            frame.render_widget(modal(lang.add_feed_title, text, theme), area);
+        }
+        Modal::SelectDiscoveredFeed { feeds, selection } => {
+            let mut lines = vec![
+                Line::from(""),
+                Line::from(Span::styled(
+                    lang.select_feed_prompt.to_string(),
+                    theme.dim_style(),
+                )),
+                Line::from(""),
+            ];
+            for (i, feed) in feeds.iter().enumerate() {
+                let marker = if i == selection { " \u{25b6} " } else { "   " };
+                let style = if i == selection {
+                    theme.highlight_style()
+                } else {
+                    Style::default()
+                };
+                let label = if let Some(title) = &feed.title {
+                    format!("{title} ({}) - {}", feed.feed_type, feed.url)
+                } else {
+                    format!("({}) {}", feed.feed_type, feed.url)
+                };
+                lines.push(Line::from(vec![
+                    Span::styled(marker.to_string(), style),
+                    Span::styled(label, style),
+                ]));
+            }
+            lines.push(Line::from(""));
+            lines.push(Line::from(lang.enter_confirm_esc_cancel));
+            let text = Text::from(lines);
+            frame.render_widget(modal(lang.select_feed_title, text, theme), area);
         }
     }
 }

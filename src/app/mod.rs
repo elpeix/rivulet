@@ -9,6 +9,7 @@ use std::sync::mpsc::Receiver;
 use log::{error, info, warn};
 
 use crate::fetch::client::{FetchOptions, HttpClient};
+use crate::fetch::discovery::{DiscoveredFeed, discover_feeds};
 use crate::fetch::parser::{map_entries, parse_feed};
 use crate::fetch::scheduler::{FetchJob, Scheduler};
 use crate::i18n::Lang;
@@ -27,6 +28,23 @@ pub struct RefreshComplete {
     pub last_error: Option<String>,
 }
 
+enum DiscoveryComplete {
+    DirectFeed {
+        url: String,
+        group_id: Option<i64>,
+    },
+    Found {
+        feeds: Vec<DiscoveredFeed>,
+        group_id: Option<i64>,
+    },
+    NotFound {
+        url: String,
+    },
+    Error {
+        message: String,
+    },
+}
+
 pub struct App {
     pub state: AppState,
     pub lang: Lang,
@@ -35,6 +53,7 @@ pub struct App {
     client: HttpClient,
     max_concurrency: usize,
     refresh_rx: Option<Receiver<RefreshComplete>>,
+    discovery_rx: Option<Receiver<DiscoveryComplete>>,
     runtime: Arc<Runtime>,
 }
 
@@ -57,6 +76,7 @@ impl App {
             client,
             max_concurrency: 6,
             refresh_rx: None,
+            discovery_rx: None,
             runtime: Arc::new(runtime),
         })
     }
@@ -81,6 +101,18 @@ impl App {
                 url,
                 group_id,
             } => self.add_feed(title, url, group_id)?,
+            Action::AddDiscoveredFeed { url, group_id } => {
+                self.insert_feed(None, url, group_id)?;
+            }
+            Action::DiscoveryResult { feeds, group_id } => {
+                if feeds.len() == 1 {
+                    self.insert_feed(None, feeds[0].url.clone(), group_id)?;
+                } else {
+                    self.state.input_mode =
+                        state::InputMode::SelectDiscoveredFeed { feeds, group_id };
+                    self.state.modal_selection = 0;
+                }
+            }
             Action::RenameFeed { id, title } => {
                 self.send_and_handle(DbCommand::RenameFeed { id, title })?;
                 self.send_and_handle(DbCommand::ListFeeds)?;
@@ -202,7 +234,7 @@ impl App {
 
     fn add_feed(
         &mut self,
-        title: Option<String>,
+        _title: Option<String>,
         url: String,
         group_id: Option<i64>,
     ) -> Result<(), DbWorkerError> {
@@ -211,6 +243,57 @@ impl App {
                 .reduce(Action::DbError(self.lang.invalid_url(&url)));
             return Ok(());
         }
+
+        if self.discovery_rx.is_some() {
+            return Ok(());
+        }
+
+        self.state.input_mode = state::InputMode::Discovering;
+        self.state
+            .reduce(Action::SetStatus(self.lang.discovering.to_string()));
+
+        let client = self.client.clone();
+        let runtime = Arc::clone(&self.runtime);
+        let (tx, rx) = std::sync::mpsc::channel();
+        self.discovery_rx = Some(rx);
+
+        std::thread::spawn(move || {
+            let result = runtime.block_on(async {
+                let response = client.fetch(&url, None, None).await;
+                match response {
+                    Ok(resp) => {
+                        if let Some(body) = resp.body {
+                            if parse_feed(&body).is_ok() {
+                                return DiscoveryComplete::DirectFeed { url, group_id };
+                            }
+                            let html = String::from_utf8_lossy(&body);
+                            let feeds = discover_feeds(&html, &url);
+                            if feeds.is_empty() {
+                                DiscoveryComplete::NotFound { url }
+                            } else {
+                                DiscoveryComplete::Found { feeds, group_id }
+                            }
+                        } else {
+                            DiscoveryComplete::NotFound { url }
+                        }
+                    }
+                    Err(e) => DiscoveryComplete::Error {
+                        message: format!("{e}"),
+                    },
+                }
+            });
+            let _ = tx.send(result);
+        });
+
+        Ok(())
+    }
+
+    fn insert_feed(
+        &mut self,
+        title: Option<String>,
+        url: String,
+        group_id: Option<i64>,
+    ) -> Result<(), DbWorkerError> {
         let feed = NewFeed {
             title,
             url: url.clone(),
@@ -518,9 +601,6 @@ impl App {
     }
 
     pub fn poll_refresh(&mut self) {
-        if self.refreshing() {
-            self.state.tick = self.state.tick.wrapping_add(1);
-        }
         let result = match &self.refresh_rx {
             Some(rx) => match rx.try_recv() {
                 Ok(result) => Some(Ok(result)),
@@ -572,8 +652,52 @@ impl App {
         }
     }
 
+    pub fn cancel_discovery(&mut self) {
+        self.discovery_rx = None;
+    }
+
+    pub fn poll_discovery(&mut self) {
+        let result = match &self.discovery_rx {
+            Some(rx) => match rx.try_recv() {
+                Ok(result) => Some(result),
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    Some(DiscoveryComplete::Error {
+                        message: "Discovery thread crashed".to_string(),
+                    })
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => None,
+            },
+            None => return,
+        };
+        if let Some(result) = result {
+            self.discovery_rx = None;
+            match result {
+                DiscoveryComplete::DirectFeed { url, group_id } => {
+                    let _ = self.insert_feed(None, url, group_id);
+                    self.state.input_mode = state::InputMode::None;
+                }
+                DiscoveryComplete::Found { feeds, group_id } => {
+                    let _ = self.dispatch(Action::DiscoveryResult { feeds, group_id });
+                }
+                DiscoveryComplete::NotFound { url } => {
+                    self.state.input_mode = state::InputMode::None;
+                    self.state
+                        .reduce(Action::DbError(self.lang.no_feed_found(&url)));
+                }
+                DiscoveryComplete::Error { message } => {
+                    self.state.input_mode = state::InputMode::None;
+                    self.state.reduce(Action::DbError(message));
+                }
+            }
+        }
+    }
+
     pub fn refreshing(&self) -> bool {
         self.refresh_rx.is_some()
+    }
+
+    pub fn discovering(&self) -> bool {
+        self.discovery_rx.is_some()
     }
 
     fn refresh_current_entries(&mut self) -> Result<(), DbWorkerError> {

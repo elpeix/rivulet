@@ -4,6 +4,7 @@ use std::time::Instant;
 use ratatui::layout::Rect;
 
 use crate::app::actions::Action;
+use crate::fetch::discovery::DiscoveredFeed;
 use crate::store::models::{Entry, Feed, Group};
 use crate::ui::rich_text::LinkRegion;
 
@@ -12,14 +13,23 @@ pub enum InputMode {
     None,
     Search,
     AddFeed,
-    AddFeedGroup { url: String },
+    AddFeedGroup {
+        url: String,
+    },
     RenameFeed,
     DeleteFeed,
     AssignGroup,
     ManageGroups,
     AddGroup,
     RenameGroup,
-    DeleteGroup { group_id: i64 },
+    DeleteGroup {
+        group_id: i64,
+    },
+    Discovering,
+    SelectDiscoveredFeed {
+        feeds: Vec<DiscoveredFeed>,
+        group_id: Option<i64>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -331,7 +341,9 @@ impl AppState {
             | Action::DeleteGroup(_)
             | Action::RenameGroup { .. }
             | Action::AssignFeedToGroup { .. }
-            | Action::SwapGroupOrder { .. } => {}
+            | Action::SwapGroupOrder { .. }
+            | Action::AddDiscoveredFeed { .. }
+            | Action::DiscoveryResult { .. } => {}
         }
     }
 
