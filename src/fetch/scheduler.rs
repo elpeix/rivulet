@@ -60,7 +60,10 @@ impl Scheduler {
             let client = self.client.clone();
             let semaphore = Arc::clone(&self.semaphore);
             set.spawn(async move {
-                let permit = semaphore.acquire_owned().await.map_err(SchedulerError::from);
+                let permit = semaphore
+                    .acquire_owned()
+                    .await
+                    .map_err(SchedulerError::from);
                 if let Err(error) = permit {
                     return (job, Err(error));
                 }
@@ -159,7 +162,10 @@ mod tests {
             last_modified: Some("Mon, 01 Jan 2024".to_string()),
         };
         let result = map_response(&job, response);
-        assert_eq!(result.body.as_ref().map(|b| b.as_ref()), Some(b"hello".as_ref()));
+        assert_eq!(
+            result.body.as_ref().map(|b| b.as_ref()),
+            Some(b"hello".as_ref())
+        );
         assert_eq!(result.etag.as_deref(), Some("etag-1"));
         assert_eq!(result.last_modified.as_deref(), Some("Mon, 01 Jan 2024"));
     }

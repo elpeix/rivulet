@@ -47,16 +47,21 @@ impl Config {
             return Self::default();
         };
         let path = dir.join("config.toml");
-        if let Ok(contents) = std::fs::read_to_string(&path) { match toml::from_str(&contents) {
-            Ok(config) => config,
-            Err(e) => {
-                log::warn!("Failed to parse {}: {}", path.display(), e);
-                Self::default()
+        if let Ok(contents) = std::fs::read_to_string(&path) {
+            match toml::from_str(&contents) {
+                Ok(config) => config,
+                Err(e) => {
+                    log::warn!("Failed to parse {}: {}", path.display(), e);
+                    Self::default()
+                }
             }
-        } } else {
+        } else {
             // Create default config on first run
             let _ = std::fs::create_dir_all(&dir);
-            let _ = std::fs::write(&path, "language = \"en\"\nrefresh_minutes = 30\nrecent_days = 30\n");
+            let _ = std::fs::write(
+                &path,
+                "language = \"en\"\nrefresh_minutes = 30\nrecent_days = 30\n",
+            );
             Self::default()
         }
     }

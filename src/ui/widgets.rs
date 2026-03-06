@@ -5,7 +5,7 @@ use ratatui::widgets::{Block, BorderType, Borders, List, ListItem, Paragraph, Wr
 use crate::app::state::{AppState, FeedRow, StatusKind};
 use crate::i18n::Lang;
 use crate::store::models::{Entry, Feed, Group};
-use crate::ui::rich_text::{rich_lines_to_ratatui, LinkRegion};
+use crate::ui::rich_text::{LinkRegion, rich_lines_to_ratatui};
 use crate::ui::theme::Theme;
 use crate::util::html::{extract_links, to_rich_lines};
 use crate::util::time::{format_timestamp, format_timestamp_relative};
@@ -31,14 +31,16 @@ pub fn feeds_list<'a>(state: &AppState, theme: &Theme, max_width: u16, lang: &La
                 ]);
                 Some(ListItem::new(line))
             }
-            FeedRow::GroupHeader { name, unread, group_id } => {
+            FeedRow::GroupHeader {
+                name,
+                unread,
+                group_id,
+            } => {
                 let collapsed = state.collapsed_groups.contains(group_id);
                 let arrow = if collapsed { "\u{25b6}" } else { "\u{25bc}" };
                 let counter = format!("  {unread}");
                 let available = max_width as usize;
-                let title_max = available
-                    .saturating_sub(counter.len())
-                    .saturating_sub(3); // arrow + space
+                let title_max = available.saturating_sub(counter.len()).saturating_sub(3); // arrow + space
                 let truncated = truncate_with_ellipsis(name, title_max);
                 let line = Line::from(vec![
                     Span::styled(
@@ -55,16 +57,12 @@ pub fn feeds_list<'a>(state: &AppState, theme: &Theme, max_width: u16, lang: &La
                 let counter = format!("  {unread}");
                 let label = lang.uncategorized;
                 let available = max_width as usize;
-                let title_max = available
-                    .saturating_sub(counter.len())
-                    .saturating_sub(3);
+                let title_max = available.saturating_sub(counter.len()).saturating_sub(3);
                 let truncated = truncate_with_ellipsis(label, title_max);
                 let line = Line::from(vec![
                     Span::styled(
                         format!("\u{25bc} {truncated}"),
-                        Style::default()
-                            .fg(theme.dim)
-                            .add_modifier(Modifier::BOLD),
+                        Style::default().fg(theme.dim).add_modifier(Modifier::BOLD),
                     ),
                     Span::styled(counter, theme.dim_style()),
                 ]);
@@ -178,7 +176,10 @@ pub fn entries_list<'a>(
             }
 
             if saved {
-                spans.push(Span::styled(lang.saved_marker, Style::default().fg(theme.status_ok)));
+                spans.push(Span::styled(
+                    lang.saved_marker,
+                    Style::default().fg(theme.status_ok),
+                ));
             }
             let title_max = available
                 .saturating_sub(feed_col_width)
@@ -275,11 +276,7 @@ pub fn preview_parts<'a>(
     }
 }
 
-pub fn panel_block(
-    theme: &Theme,
-    focused: bool,
-    bg: Option<ratatui::style::Color>,
-) -> Block<'_> {
+pub fn panel_block(theme: &Theme, focused: bool, bg: Option<ratatui::style::Color>) -> Block<'_> {
     let base_style = if focused {
         theme.focus_block_style()
     } else if let Some(color) = bg {
@@ -333,10 +330,7 @@ pub fn status_bar<'a>(state: &AppState, theme: &Theme, lang: &Lang) -> Paragraph
     }
 
     spans.push(Span::raw("  |  "));
-    spans.push(Span::styled(
-        lang.status_bar_hint,
-        theme.dim_style(),
-    ));
+    spans.push(Span::styled(lang.status_bar_hint, theme.dim_style()));
 
     Paragraph::new(Line::from(spans))
         .block(Block::default().borders(Borders::TOP))
@@ -358,7 +352,12 @@ pub fn modal<'a>(title: &'a str, text: Text<'a>, theme: &'a Theme) -> Paragraph<
         .style(Style::default().fg(theme.text).bg(theme.block_bg))
 }
 
-pub fn header_bar<'a>(state: &'a AppState, theme: &Theme, recent_days: i64, lang: &Lang) -> Paragraph<'a> {
+pub fn header_bar<'a>(
+    state: &'a AppState,
+    theme: &Theme,
+    recent_days: i64,
+    lang: &Lang,
+) -> Paragraph<'a> {
     let focus = match state.focus {
         crate::app::state::Focus::Feeds => lang.feeds,
         crate::app::state::Focus::Entries => lang.entries,
@@ -406,16 +405,22 @@ pub fn header_bar<'a>(state: &'a AppState, theme: &Theme, recent_days: i64, lang
         Span::styled(filter, Style::default().fg(theme.accent_alt)),
     ];
     if let Some(query) = state.search_query.as_deref()
-        && !query.is_empty() {
-            spans.push(Span::styled("  |  ", theme.dim_style()));
-            spans.push(Span::styled(lang.search_label, theme.dim_style()));
-            spans.push(Span::styled(query, Style::default().fg(theme.accent)));
-        }
+        && !query.is_empty()
+    {
+        spans.push(Span::styled("  |  ", theme.dim_style()));
+        spans.push(Span::styled(lang.search_label, theme.dim_style()));
+        spans.push(Span::styled(query, Style::default().fg(theme.accent)));
+    }
 
     Paragraph::new(Line::from(spans)).style(theme.header_style())
 }
 
-pub fn assign_group_modal_text(groups: &[Group], selection: usize, theme: &Theme, lang: &Lang) -> Text<'static> {
+pub fn assign_group_modal_text(
+    groups: &[Group],
+    selection: usize,
+    theme: &Theme,
+    lang: &Lang,
+) -> Text<'static> {
     let mut lines = vec![
         Line::from(""),
         Line::from(Span::styled(
@@ -442,7 +447,11 @@ pub fn assign_group_modal_text(groups: &[Group], selection: usize, theme: &Theme
     }
     // "No category" option
     let idx = groups.len();
-    let marker = if selection == idx { " \u{25b6} " } else { "   " };
+    let marker = if selection == idx {
+        " \u{25b6} "
+    } else {
+        "   "
+    };
     let style = if selection == idx {
         theme.highlight_style()
     } else {
@@ -454,7 +463,11 @@ pub fn assign_group_modal_text(groups: &[Group], selection: usize, theme: &Theme
     ]));
     // "New category..." option
     let idx = groups.len() + 1;
-    let marker = if selection == idx { " \u{25b6} " } else { "   " };
+    let marker = if selection == idx {
+        " \u{25b6} "
+    } else {
+        "   "
+    };
     let style = if selection == idx {
         theme.highlight_style()
     } else {
@@ -472,7 +485,12 @@ pub fn assign_group_modal_text(groups: &[Group], selection: usize, theme: &Theme
     Text::from(lines)
 }
 
-pub fn manage_groups_modal_text(groups: &[Group], selection: usize, theme: &Theme, lang: &Lang) -> Text<'static> {
+pub fn manage_groups_modal_text(
+    groups: &[Group],
+    selection: usize,
+    theme: &Theme,
+    lang: &Lang,
+) -> Text<'static> {
     let mut lines = vec![Line::from("")];
     if groups.is_empty() {
         lines.push(Line::from(Span::styled(
@@ -522,4 +540,3 @@ fn truncate_with_ellipsis(s: &str, max: usize) -> String {
         result
     }
 }
-

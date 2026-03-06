@@ -3,21 +3,21 @@ pub mod rich_text;
 pub mod theme;
 pub mod widgets;
 
+use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::Style;
 use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{
     Clear, ListState, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap,
 };
-use ratatui::Frame;
 
 use crate::app::state::AppState;
 use crate::i18n::Lang;
 use crate::ui::layout::{centered_rect, layout_chunks};
 use crate::ui::theme::Theme;
 use crate::ui::widgets::{
-    assign_group_modal_text, entries_list, feeds_list, header_bar, manage_groups_modal_text,
-    modal, panel_block, preview_block, preview_parts, selected_entry, status_bar,
+    assign_group_modal_text, entries_list, feeds_list, header_bar, manage_groups_modal_text, modal,
+    panel_block, preview_block, preview_parts, selected_entry, status_bar,
 };
 
 #[derive(Debug, Clone)]
@@ -47,7 +47,14 @@ pub enum Modal {
     },
 }
 
-pub fn draw(frame: &mut Frame<'_>, state: &mut AppState, theme: &Theme, modal_state: Option<Modal>, recent_days: i64, lang: &Lang) {
+pub fn draw(
+    frame: &mut Frame<'_>,
+    state: &mut AppState,
+    theme: &Theme,
+    modal_state: Option<Modal>,
+    recent_days: i64,
+    lang: &Lang,
+) {
     let layout = layout_chunks(frame.area(), state.panel_ratios);
 
     let header = header_bar(state, theme, recent_days, lang);
@@ -65,7 +72,13 @@ pub fn draw(frame: &mut Frame<'_>, state: &mut AppState, theme: &Theme, modal_st
     }
 }
 
-fn draw_feeds_panel(frame: &mut Frame<'_>, state: &AppState, theme: &Theme, area: Rect, lang: &Lang) {
+fn draw_feeds_panel(
+    frame: &mut Frame<'_>,
+    state: &AppState,
+    theme: &Theme,
+    area: Rect,
+    lang: &Lang,
+) {
     let mut feed_state = ListState::default();
     feed_state.select(state.selected_feed_row_index);
     let focused = state.focus == crate::app::state::Focus::Feeds;
@@ -92,7 +105,13 @@ fn draw_feeds_panel(frame: &mut Frame<'_>, state: &AppState, theme: &Theme, area
     frame.render_stateful_widget(feeds, split[2], &mut feed_state);
 }
 
-fn draw_entries_panel(frame: &mut Frame<'_>, state: &AppState, theme: &Theme, area: Rect, lang: &Lang) {
+fn draw_entries_panel(
+    frame: &mut Frame<'_>,
+    state: &AppState,
+    theme: &Theme,
+    area: Rect,
+    lang: &Lang,
+) {
     let mut entry_state = ListState::default();
     entry_state.select(state.selected_entry_index);
     let focused = state.focus == crate::app::state::Focus::Entries;
@@ -163,7 +182,13 @@ fn draw_entries_panel(frame: &mut Frame<'_>, state: &AppState, theme: &Theme, ar
     }
 }
 
-fn draw_preview_panel(frame: &mut Frame<'_>, state: &mut AppState, theme: &Theme, area: Rect, lang: &Lang) {
+fn draw_preview_panel(
+    frame: &mut Frame<'_>,
+    state: &mut AppState,
+    theme: &Theme,
+    area: Rect,
+    lang: &Lang,
+) {
     let focused = state.focus == crate::app::state::Focus::Preview;
     let block = preview_block(theme, focused);
     let inner = block.inner(area);
@@ -240,7 +265,13 @@ fn draw_preview_panel(frame: &mut Frame<'_>, state: &mut AppState, theme: &Theme
     }
 }
 
-fn draw_modal(frame: &mut Frame<'_>, state: &AppState, theme: &Theme, modal_state: Modal, lang: &Lang) {
+fn draw_modal(
+    frame: &mut Frame<'_>,
+    state: &AppState,
+    theme: &Theme,
+    modal_state: Modal,
+    lang: &Lang,
+) {
     let area = centered_rect(70, 60, frame.area());
     frame.render_widget(Clear, area);
     match modal_state {
@@ -314,12 +345,22 @@ fn draw_help_modal(frame: &mut Frame<'_>, theme: &Theme, area: Rect, scroll: u16
     let col_width = inner_width / 2;
     let row = |left_key: &str, left_label: &str, right_key: &str, right_label: &str| {
         Line::from(vec![
-            Span::styled(format!("  {left_key:<12}"), Style::default().fg(theme.accent_alt)),
             Span::styled(
-                format!("{:<width$}", left_label, width = col_width.saturating_sub(14)),
+                format!("  {left_key:<12}"),
+                Style::default().fg(theme.accent_alt),
+            ),
+            Span::styled(
+                format!(
+                    "{:<width$}",
+                    left_label,
+                    width = col_width.saturating_sub(14)
+                ),
                 Style::default().fg(theme.text),
             ),
-            Span::styled(format!("{right_key:<12}"), Style::default().fg(theme.accent_alt)),
+            Span::styled(
+                format!("{right_key:<12}"),
+                Style::default().fg(theme.accent_alt),
+            ),
             Span::styled(right_label.to_string(), Style::default().fg(theme.text)),
         ])
     };
@@ -327,9 +368,24 @@ fn draw_help_modal(frame: &mut Frame<'_>, theme: &Theme, area: Rect, scroll: u16
         Line::from(""),
         heading(lang.help_navigation),
         separator.clone(),
-        row("Left/Right", lang.help_move_panel, "Up/Down", lang.help_move_selection),
-        row("PgUp/PgDn", lang.help_scroll_preview, "Home/End", lang.help_top_bottom),
-        row("H / L", lang.help_resize_panel, "Enter", lang.help_select_open),
+        row(
+            "Left/Right",
+            lang.help_move_panel,
+            "Up/Down",
+            lang.help_move_selection,
+        ),
+        row(
+            "PgUp/PgDn",
+            lang.help_scroll_preview,
+            "Home/End",
+            lang.help_top_bottom,
+        ),
+        row(
+            "H / L",
+            lang.help_resize_panel,
+            "Enter",
+            lang.help_select_open,
+        ),
         row("Space", lang.help_collapse_category, "Esc", lang.help_back),
         Line::from(""),
         heading(lang.help_feeds),
@@ -337,7 +393,12 @@ fn draw_help_modal(frame: &mut Frame<'_>, theme: &Theme, area: Rect, scroll: u16
         row("a", lang.help_add_feed, "e", lang.help_rename_feed),
         row("d", lang.help_delete_feed, "r", lang.help_refresh_all),
         row("f", lang.help_toggle_unread, "g", lang.help_toggle_saved),
-        row("c", lang.help_assign_category, "C", lang.help_manage_categories),
+        row(
+            "c",
+            lang.help_assign_category,
+            "C",
+            lang.help_manage_categories,
+        ),
         row("R", lang.help_mark_feed_read, "S", lang.help_cycle_sort),
         row("t", lang.help_toggle_time, "", ""),
         Line::from(""),

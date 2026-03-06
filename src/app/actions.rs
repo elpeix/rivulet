@@ -35,7 +35,10 @@ pub enum Action {
         group_id: Option<i64>,
     },
     DeleteFeed(i64),
-    RenameFeed { id: i64, title: Option<String> },
+    RenameFeed {
+        id: i64,
+        title: Option<String>,
+    },
     MarkRead(i64),
     MarkUnread(i64),
     MarkAllRead(Vec<i64>),
@@ -58,11 +61,22 @@ pub enum Action {
     DbError(String),
     LoadGroups,
     GroupsLoaded(Vec<Group>),
-    AddGroup { name: String },
+    AddGroup {
+        name: String,
+    },
     DeleteGroup(i64),
-    RenameGroup { id: i64, name: String },
-    AssignFeedToGroup { feed_id: i64, group_id: Option<i64> },
-    SwapGroupOrder { id_a: i64, id_b: i64 },
+    RenameGroup {
+        id: i64,
+        name: String,
+    },
+    AssignFeedToGroup {
+        feed_id: i64,
+        group_id: Option<i64>,
+    },
+    SwapGroupOrder {
+        id_a: i64,
+        id_b: i64,
+    },
     ToggleGroupCollapse(i64),
     ResizePanel(i8),
     UpdateTotalEntryCount(i64),

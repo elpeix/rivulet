@@ -1,6 +1,9 @@
 use std::time::Duration;
 
-use reqwest::header::{HeaderMap, HeaderName, HeaderValue, IF_MODIFIED_SINCE, IF_NONE_MATCH, LAST_MODIFIED, ETAG, USER_AGENT};
+use reqwest::header::{
+    ETAG, HeaderMap, HeaderName, HeaderValue, IF_MODIFIED_SINCE, IF_NONE_MATCH, LAST_MODIFIED,
+    USER_AGENT,
+};
 use reqwest::{Client, StatusCode};
 
 #[derive(Debug, Clone)]
@@ -78,17 +81,23 @@ impl HttpClient {
         extra_headers: Option<&[(&str, &str)]>,
     ) -> Result<FetchResponse, FetchError> {
         let mut headers = HeaderMap::new();
-        headers.insert(USER_AGENT, HeaderValue::from_str(&self.user_agent).unwrap_or_else(|_| HeaderValue::from_static("rivulet")));
+        headers.insert(
+            USER_AGENT,
+            HeaderValue::from_str(&self.user_agent)
+                .unwrap_or_else(|_| HeaderValue::from_static("rivulet")),
+        );
 
         if let Some(cache) = cache {
             if let Some(etag) = &cache.etag
-                && let Ok(value) = HeaderValue::from_str(etag) {
-                    headers.insert(IF_NONE_MATCH, value);
-                }
+                && let Ok(value) = HeaderValue::from_str(etag)
+            {
+                headers.insert(IF_NONE_MATCH, value);
+            }
             if let Some(last_modified) = &cache.last_modified
-                && let Ok(value) = HeaderValue::from_str(last_modified) {
-                    headers.insert(IF_MODIFIED_SINCE, value);
-                }
+                && let Ok(value) = HeaderValue::from_str(last_modified)
+            {
+                headers.insert(IF_MODIFIED_SINCE, value);
+            }
         }
 
         if let Some(extra_headers) = extra_headers {
@@ -102,12 +111,7 @@ impl HttpClient {
             }
         }
 
-        let response = self
-            .client
-            .get(url)
-            .headers(headers)
-            .send()
-            .await?;
+        let response = self.client.get(url).headers(headers).send().await?;
 
         let status = response.status();
         let etag = response

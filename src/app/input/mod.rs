@@ -6,9 +6,9 @@ pub use keyboard::handle_key;
 pub use modals::{current_modal, handle_help_key, handle_input_mode};
 pub use mouse::handle_mouse;
 
+use crate::app::App;
 use crate::app::actions::Action;
 use crate::app::state::FeedRow;
-use crate::app::App;
 
 /// Reload entries based on the currently selected feed row.
 /// Shared helper that eliminates duplication between reload and navigation.

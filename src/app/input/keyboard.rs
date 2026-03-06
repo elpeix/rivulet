@@ -1,8 +1,8 @@
 use crossterm::event::{KeyCode, KeyEvent};
 
+use crate::app::App;
 use crate::app::actions::Action;
 use crate::app::state::{FeedRow, Focus, InputMode};
-use crate::app::App;
 use crate::util::open::open_url;
 use crate::util::time::now_timestamp;
 
@@ -171,7 +171,10 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
                 crate::app::state::SortMode::DateAsc => app.lang.sort_date_asc,
                 crate::app::state::SortMode::TitleAsc => app.lang.sort_title_asc,
             };
-            let _ = app.dispatch(Action::SetStatus(format!("{}: {}", app.lang.sort_label, label)));
+            let _ = app.dispatch(Action::SetStatus(format!(
+                "{}: {}",
+                app.lang.sort_label, label
+            )));
             dispatch_load_entries(app);
         }
         KeyCode::Char('R') => {
@@ -246,9 +249,7 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
             if app.state.selected_feed.is_some() {
                 app.state.input_mode = InputMode::DeleteFeed;
                 app.state.input_buffer.clear();
-                let _ = app.dispatch(Action::SetStatus(
-                    app.lang.delete_feed_confirm.to_string(),
-                ));
+                let _ = app.dispatch(Action::SetStatus(app.lang.delete_feed_confirm.to_string()));
             } else {
                 let _ = app.dispatch(Action::SetStatus(app.lang.no_feed_selected.to_string()));
             }
@@ -413,7 +414,11 @@ fn open_selected_link_or_entry(app: &mut App) {
             }
         }
     } else if let Some(entry_id) = app.state.selected_entry {
-        if let Some(entry) = app.state.entry_position(entry_id).and_then(|i| app.state.entries.get(i)) {
+        if let Some(entry) = app
+            .state
+            .entry_position(entry_id)
+            .and_then(|i| app.state.entries.get(i))
+        {
             if let Some(url) = entry.url.as_deref().filter(|v| !v.trim().is_empty()) {
                 match open_url(url) {
                     Ok(()) => {
