@@ -81,8 +81,11 @@ impl Scheduler {
 
         let mut results = Vec::new();
         while let Some(joined) = set.join_next().await {
-            if let Ok(result) = joined {
-                results.push(result);
+            match joined {
+                Ok(result) => results.push(result),
+                Err(err) => {
+                    log::warn!("Fetch task panicked: {err}");
+                }
             }
         }
 

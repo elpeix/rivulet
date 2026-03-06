@@ -33,13 +33,22 @@ pub struct FetchResponse {
 
 #[derive(Debug)]
 pub enum FetchError {
-    Http,
-    Status,
+    Http(String),
+    Status(u16),
+}
+
+impl std::fmt::Display for FetchError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Http(msg) => write!(f, "HTTP error: {msg}"),
+            Self::Status(code) => write!(f, "HTTP status {code}"),
+        }
+    }
 }
 
 impl From<reqwest::Error> for FetchError {
-    fn from(_: reqwest::Error) -> Self {
-        Self::Http
+    fn from(err: reqwest::Error) -> Self {
+        Self::Http(err.to_string())
     }
 }
 
@@ -54,7 +63,7 @@ impl HttpClient {
         let client = Client::builder()
             .timeout(options.timeout)
             .build()
-            .map_err(|_| FetchError::Http)?;
+            .map_err(|e| FetchError::Http(e.to_string()))?;
 
         Ok(Self {
             client,
@@ -105,12 +114,12 @@ impl HttpClient {
             .headers()
             .get(ETAG)
             .and_then(|value| value.to_str().ok())
-            .map(|value| value.to_string());
+            .map(std::string::ToString::to_string);
         let last_modified = response
             .headers()
             .get(LAST_MODIFIED)
             .and_then(|value| value.to_str().ok())
-            .map(|value| value.to_string());
+            .map(std::string::ToString::to_string);
 
         if status == StatusCode::NOT_MODIFIED {
             return Ok(FetchResponse {
@@ -121,7 +130,7 @@ impl HttpClient {
         }
 
         if !status.is_success() {
-            return Err(FetchError::Status);
+            return Err(FetchError::Status(status.as_u16()));
         }
 
         let body = response.bytes().await?;

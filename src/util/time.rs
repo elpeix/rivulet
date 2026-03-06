@@ -50,7 +50,6 @@ pub fn format_timestamp_relative(timestamp: i64, lang: &Lang) -> String {
     let minutes = seconds / 60;
     let hours = minutes / 60;
     let days = hours / 24;
-    let weeks = days / 7;
 
     if seconds < 60 {
         lang.now.to_string()
@@ -58,12 +57,8 @@ pub fn format_timestamp_relative(timestamp: i64, lang: &Lang) -> String {
         lang.minutes_ago(minutes)
     } else if hours < 24 {
         lang.hours_ago(hours)
-    } else if days == 1 {
-        lang.yesterday.to_string()
-    } else if days < 7 {
+    } else if days <= 30 {
         lang.days_ago(days)
-    } else if weeks < 4 {
-        lang.weeks_ago(weeks)
     } else {
         format_timestamp_short(timestamp)
     }

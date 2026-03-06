@@ -51,7 +51,9 @@ pub fn map_entry(feed_id: i64, entry: &FeedEntry, fetched_at: i64) -> NewEntry {
 
     let url = entry
         .links
-        .first()
+        .iter()
+        .find(|link| matches!(link.rel.as_deref(), Some("alternate") | None))
+        .or_else(|| entry.links.first())
         .map(|link| link.href.trim().to_string())
         .filter(|value| !value.is_empty());
 
@@ -66,11 +68,7 @@ pub fn map_entry(feed_id: i64, entry: &FeedEntry, fetched_at: i64) -> NewEntry {
         .or(entry.updated)
         .map(|dt| dt.timestamp());
 
-    let hash = entry
-        .content
-        .as_ref()
-        .and_then(|content| content.src.as_ref())
-        .map(|src| src.href.clone());
+    let hash = None; // computed later by NewEntry::normalized()
 
     NewEntry {
         feed_id,

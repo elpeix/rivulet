@@ -4,21 +4,37 @@ use ratatui::widgets::{Block, BorderType, Borders, List, ListItem, Paragraph, Wr
 
 use crate::app::state::{AppState, FeedRow, StatusKind};
 use crate::i18n::Lang;
-use crate::store::models::{Entry, Group};
-use crate::ui::rich_text::rich_lines_to_ratatui;
+use crate::store::models::{Entry, Feed, Group};
+use crate::ui::rich_text::{rich_lines_to_ratatui, LinkRegion};
 use crate::ui::theme::Theme;
-use crate::util::html::to_rich_lines;
+use crate::util::html::{extract_links, to_rich_lines};
 use crate::util::time::{format_timestamp, format_timestamp_relative};
 
 pub fn feeds_list<'a>(state: &AppState, theme: &Theme, max_width: u16, lang: &Lang) -> List<'a> {
     let items: Vec<ListItem> = state
         .feed_rows
         .iter()
-        .map(|row| match row {
+        .filter_map(|row| match row {
+            FeedRow::AllFeeds => {
+                let counter = format!("  {}", state.total_unread);
+                let available = max_width as usize;
+                let title_max = available.saturating_sub(counter.len()).saturating_sub(2);
+                let truncated = truncate_with_ellipsis(lang.all_feeds, title_max);
+                let line = Line::from(vec![
+                    Span::styled(
+                        format!("\u{2605} {truncated}"),
+                        Style::default()
+                            .fg(theme.accent)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(counter, theme.dim_style()),
+                ]);
+                Some(ListItem::new(line))
+            }
             FeedRow::GroupHeader { name, unread, group_id } => {
                 let collapsed = state.collapsed_groups.contains(group_id);
                 let arrow = if collapsed { "\u{25b6}" } else { "\u{25bc}" };
-                let counter = format!("  {}", unread);
+                let counter = format!("  {unread}");
                 let available = max_width as usize;
                 let title_max = available
                     .saturating_sub(counter.len())
@@ -26,17 +42,17 @@ pub fn feeds_list<'a>(state: &AppState, theme: &Theme, max_width: u16, lang: &La
                 let truncated = truncate_with_ellipsis(name, title_max);
                 let line = Line::from(vec![
                     Span::styled(
-                        format!("{} {}", arrow, truncated),
+                        format!("{arrow} {truncated}"),
                         Style::default()
                             .fg(theme.accent)
                             .add_modifier(Modifier::BOLD),
                     ),
                     Span::styled(counter, theme.dim_style()),
                 ]);
-                ListItem::new(line)
+                Some(ListItem::new(line))
             }
             FeedRow::UngroupedHeader { unread } => {
-                let counter = format!("  {}", unread);
+                let counter = format!("  {unread}");
                 let label = lang.uncategorized;
                 let available = max_width as usize;
                 let title_max = available
@@ -45,21 +61,20 @@ pub fn feeds_list<'a>(state: &AppState, theme: &Theme, max_width: u16, lang: &La
                 let truncated = truncate_with_ellipsis(label, title_max);
                 let line = Line::from(vec![
                     Span::styled(
-                        format!("\u{25bc} {}", truncated),
+                        format!("\u{25bc} {truncated}"),
                         Style::default()
                             .fg(theme.dim)
                             .add_modifier(Modifier::BOLD),
                     ),
                     Span::styled(counter, theme.dim_style()),
                 ]);
-                ListItem::new(line)
+                Some(ListItem::new(line))
             }
             FeedRow::FeedItem { feed_index } => {
-                let feed = &state.feeds[*feed_index];
+                let feed = state.feeds.get(*feed_index)?;
                 let unread = state.unread_counts.get(&feed.id).copied().unwrap_or(0);
                 let title = feed
-                    .title
-                    .as_deref()
+                    .display_title()
                     .filter(|value| !value.is_empty())
                     .unwrap_or(feed.url.as_str());
                 let base_style = if unread > 0 {
@@ -67,7 +82,7 @@ pub fn feeds_list<'a>(state: &AppState, theme: &Theme, max_width: u16, lang: &La
                 } else {
                     Style::default()
                 };
-                let counter = format!("  {}", unread);
+                let counter = format!("  {unread}");
                 let has_groups = !state.groups.is_empty();
                 let indent = if has_groups { "  " } else { "" };
                 let available = max_width as usize;
@@ -81,7 +96,7 @@ pub fn feeds_list<'a>(state: &AppState, theme: &Theme, max_width: u16, lang: &La
                     Span::styled(truncated, base_style),
                     Span::styled(counter, theme.dim_style()),
                 ]);
-                ListItem::new(line)
+                Some(ListItem::new(line))
             }
         })
         .collect();
@@ -91,7 +106,33 @@ pub fn feeds_list<'a>(state: &AppState, theme: &Theme, max_width: u16, lang: &La
         .highlight_symbol(" ")
 }
 
-pub fn entries_list<'a>(entries: &'a [Entry], theme: &Theme, max_width: u16, lang: &Lang) -> List<'a> {
+pub fn entries_list<'a>(
+    entries: &'a [Entry],
+    feeds: &'a [Feed],
+    show_feed: bool,
+    theme: &Theme,
+    max_width: u16,
+    lang: &Lang,
+) -> List<'a> {
+    // Pre-compute feed name column width when showing feeds
+    let feed_col_width = if show_feed {
+        let max_name = entries
+            .iter()
+            .filter_map(|e| {
+                feeds
+                    .iter()
+                    .find(|f| f.id == e.feed_id)
+                    .and_then(|f| f.display_title())
+                    .map(|t| t.chars().count())
+            })
+            .max()
+            .unwrap_or(0)
+            .min(16);
+        max_name + 1 // +1 for separator space
+    } else {
+        0
+    };
+
     let items: Vec<ListItem> = entries
         .iter()
         .map(|entry| {
@@ -119,13 +160,37 @@ pub fn entries_list<'a>(entries: &'a [Entry], theme: &Theme, max_width: u16, lan
             let prefix = if saved { lang.saved_marker } else { "" };
             let available = (max_width as usize).saturating_sub(1);
             let date_len = date.len();
-            let title_max = available.saturating_sub(prefix.len()).saturating_sub(date_len).saturating_sub(1);
-            let truncated = truncate_with_ellipsis(title, title_max);
-            let padding = available.saturating_sub(prefix.len()).saturating_sub(truncated.chars().count()).saturating_sub(date_len);
+
             let mut spans = Vec::new();
+
+            if show_feed && feed_col_width > 0 {
+                let feed_name = feeds
+                    .iter()
+                    .find(|f| f.id == entry.feed_id)
+                    .and_then(|f| f.display_title())
+                    .unwrap_or("?");
+                let truncated_feed = truncate_with_ellipsis(feed_name, feed_col_width - 1);
+                let pad = feed_col_width.saturating_sub(truncated_feed.chars().count());
+                spans.push(Span::styled(
+                    format!("{}{}", truncated_feed, " ".repeat(pad)),
+                    Style::default().fg(theme.accent_alt),
+                ));
+            }
+
             if saved {
                 spans.push(Span::styled(lang.saved_marker, Style::default().fg(theme.status_ok)));
             }
+            let title_max = available
+                .saturating_sub(feed_col_width)
+                .saturating_sub(prefix.len())
+                .saturating_sub(date_len)
+                .saturating_sub(1);
+            let truncated = truncate_with_ellipsis(title, title_max);
+            let padding = available
+                .saturating_sub(feed_col_width)
+                .saturating_sub(prefix.len())
+                .saturating_sub(truncated.chars().count())
+                .saturating_sub(date_len);
             spans.push(Span::styled(truncated, title_style));
             spans.push(Span::raw(" ".repeat(padding)));
             spans.push(Span::styled(date, theme.dim_style()));
@@ -144,6 +209,8 @@ pub struct PreviewParts<'a> {
     pub meta: Line<'a>,
     pub body_lines: Vec<Line<'static>>,
     pub body_len: usize,
+    pub links: Vec<String>,
+    pub link_regions: Vec<LinkRegion>,
 }
 
 pub fn preview_parts<'a>(
@@ -151,6 +218,7 @@ pub fn preview_parts<'a>(
     theme: &'a Theme,
     width: u16,
     lang: &Lang,
+    selected_link_url: Option<&str>,
 ) -> PreviewParts<'a> {
     if let Some(entry) = entry {
         let title = entry
@@ -166,15 +234,15 @@ pub fn preview_parts<'a>(
             .published_at
             .or(Some(entry.fetched_at))
             .map(format_timestamp)
-            .unwrap_or_else(|| "".to_string());
+            .unwrap_or_default();
+        let author = entry.author.clone().unwrap_or_default();
         let url = entry.url.clone().unwrap_or_default();
-        let meta_text = match (date.is_empty(), url.is_empty()) {
-            (false, false) => format!("{} | {}", date, url),
-            (false, true) => date,
-            (true, false) => url,
-            (true, true) => String::new(),
-        };
-        let meta_line = Line::from(Span::styled(meta_text, theme.dim_style()));
+        let meta_parts: Vec<&str> = [date.as_str(), author.as_str(), url.as_str()]
+            .iter()
+            .filter(|s| !s.is_empty())
+            .copied()
+            .collect();
+        let meta_line = Line::from(Span::styled(meta_parts.join(" | "), theme.dim_style()));
 
         let body_html = entry
             .content
@@ -183,14 +251,17 @@ pub fn preview_parts<'a>(
             .unwrap_or("");
         let render_width = width.saturating_sub(2).max(20) as usize;
         let tagged = to_rich_lines(body_html, render_width);
-        let body_lines = rich_lines_to_ratatui(tagged, theme);
-        let body_len = body_lines.len();
+        let links = extract_links(&tagged);
+        let rich = rich_lines_to_ratatui(tagged, theme, selected_link_url);
+        let body_len = rich.lines.len();
 
         PreviewParts {
             title: title_line,
             meta: meta_line,
-            body_lines,
+            body_lines: rich.lines,
             body_len,
+            links,
+            link_regions: rich.link_regions,
         }
     } else {
         PreviewParts {
@@ -198,15 +269,17 @@ pub fn preview_parts<'a>(
             meta: Line::from(""),
             body_lines: vec![Line::from("")],
             body_len: 1,
+            links: Vec::new(),
+            link_regions: Vec::new(),
         }
     }
 }
 
-pub fn panel_block<'a>(
-    theme: &'a Theme,
+pub fn panel_block(
+    theme: &Theme,
     focused: bool,
     bg: Option<ratatui::style::Color>,
-) -> Block<'a> {
+) -> Block<'_> {
     let base_style = if focused {
         theme.focus_block_style()
     } else if let Some(color) = bg {
@@ -226,7 +299,7 @@ pub fn panel_block<'a>(
         .style(base_style)
 }
 
-pub fn preview_block<'a>(theme: &'a Theme, focused: bool) -> Block<'a> {
+pub fn preview_block(theme: &Theme, focused: bool) -> Block<'_> {
     panel_block(theme, focused, Some(theme.preview_bg))
 }
 
@@ -285,7 +358,7 @@ pub fn modal<'a>(title: &'a str, text: Text<'a>, theme: &'a Theme) -> Paragraph<
         .style(Style::default().fg(theme.text).bg(theme.block_bg))
 }
 
-pub fn header_bar<'a>(state: &'a AppState, theme: &Theme, lang: &Lang) -> Paragraph<'a> {
+pub fn header_bar<'a>(state: &'a AppState, theme: &Theme, recent_days: i64, lang: &Lang) -> Paragraph<'a> {
     let focus = match state.focus {
         crate::app::state::Focus::Feeds => lang.feeds,
         crate::app::state::Focus::Entries => lang.entries,
@@ -295,18 +368,20 @@ pub fn header_bar<'a>(state: &'a AppState, theme: &Theme, lang: &Lang) -> Paragr
         .selected_feed
         .and_then(|id| state.feeds.iter().find(|feed| feed.id == id))
         .and_then(|feed| {
-            feed.title
-                .as_deref()
+            feed.display_title()
                 .filter(|value| !value.is_empty())
                 .or(Some(feed.url.as_str()))
         })
         .unwrap_or(lang.no_feed_selected);
-    let mut filters = Vec::new();
+    let mut filters: Vec<String> = Vec::new();
     if state.unread_only {
-        filters.push(lang.filter_unread);
+        filters.push(lang.filter_unread.to_string());
     }
     if state.saved_only {
-        filters.push(lang.filter_saved);
+        filters.push(lang.filter_saved.to_string());
+    }
+    if state.recent_only {
+        filters.push(lang.filter_recent_days(recent_days));
     }
     let filter = if filters.is_empty() {
         lang.filter_all.to_string()
@@ -342,45 +417,53 @@ pub fn header_bar<'a>(state: &'a AppState, theme: &Theme, lang: &Lang) -> Paragr
 
 pub fn assign_group_modal_text(groups: &[Group], selection: usize, theme: &Theme, lang: &Lang) -> Text<'static> {
     let mut lines = vec![
-        Line::from(lang.select_category.to_string()),
+        Line::from(""),
+        Line::from(Span::styled(
+            lang.select_category.to_string(),
+            theme.dim_style(),
+        )),
         Line::from(""),
     ];
     for (i, group) in groups.iter().enumerate() {
-        let marker = if i == selection { "> " } else { "  " };
+        let marker = if i == selection { " \u{25b6} " } else { "   " };
         let style = if i == selection {
             theme.highlight_style()
         } else {
             Style::default()
         };
-        lines.push(Line::from(Span::styled(
-            format!("{}{}", marker, group.name),
-            style,
-        )));
+        lines.push(Line::from(vec![
+            Span::styled(marker.to_string(), style),
+            Span::styled(group.name.clone(), style),
+        ]));
+    }
+    // Separator
+    if !groups.is_empty() {
+        lines.push(Line::from(""));
     }
     // "No category" option
     let idx = groups.len();
-    let marker = if selection == idx { "> " } else { "  " };
+    let marker = if selection == idx { " \u{25b6} " } else { "   " };
     let style = if selection == idx {
         theme.highlight_style()
     } else {
         theme.dim_style()
     };
-    lines.push(Line::from(Span::styled(
-        format!("{}{}", marker, lang.no_category),
-        style,
-    )));
+    lines.push(Line::from(vec![
+        Span::styled(marker.to_string(), style),
+        Span::styled(lang.no_category.to_string(), style),
+    ]));
     // "New category..." option
     let idx = groups.len() + 1;
-    let marker = if selection == idx { "> " } else { "  " };
+    let marker = if selection == idx { " \u{25b6} " } else { "   " };
     let style = if selection == idx {
         theme.highlight_style()
     } else {
         Style::default().fg(theme.accent_alt)
     };
-    lines.push(Line::from(Span::styled(
-        format!("{}{}", marker, lang.new_category_option),
-        style,
-    )));
+    lines.push(Line::from(vec![
+        Span::styled(marker.to_string(), style),
+        Span::styled(lang.new_category_option.to_string(), style),
+    ]));
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
         lang.enter_confirm_esc_cancel.to_string(),
@@ -390,10 +473,7 @@ pub fn assign_group_modal_text(groups: &[Group], selection: usize, theme: &Theme
 }
 
 pub fn manage_groups_modal_text(groups: &[Group], selection: usize, theme: &Theme, lang: &Lang) -> Text<'static> {
-    let mut lines = vec![
-        Line::from(lang.categories_title.trim().to_string()),
-        Line::from(""),
-    ];
+    let mut lines = vec![Line::from("")];
     if groups.is_empty() {
         lines.push(Line::from(Span::styled(
             format!("  {}", lang.no_categories),
@@ -401,16 +481,18 @@ pub fn manage_groups_modal_text(groups: &[Group], selection: usize, theme: &Them
         )));
     } else {
         for (i, group) in groups.iter().enumerate() {
-            let marker = if i == selection { "> " } else { "  " };
+            let marker = if i == selection { " \u{25b6} " } else { "   " };
             let style = if i == selection {
                 theme.highlight_style()
             } else {
                 Style::default()
             };
-            lines.push(Line::from(Span::styled(
-                format!("{}{}", marker, group.name),
-                style,
-            )));
+            let pos = format!("{}. ", i + 1);
+            lines.push(Line::from(vec![
+                Span::styled(marker.to_string(), style),
+                Span::styled(pos, theme.dim_style()),
+                Span::styled(group.name.clone(), style),
+            ]));
         }
     }
     lines.push(Line::from(""));

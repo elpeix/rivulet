@@ -2,6 +2,9 @@ use std::path::Path;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 
+use log::warn;
+
+use crate::app::state::SortMode;
 use crate::store::models::{Entry, Feed, Group, NewEntry, NewFeed, NewGroup};
 use crate::store::repo::Repo;
 
@@ -11,6 +14,7 @@ pub type DbResult<T> = Result<T, String>;
 pub enum DbCommand {
     CreateFeed(NewFeed),
     DeleteFeed(i64),
+    RenameFeed { id: i64, title: Option<String> },
     ListFeeds,
     UpdateFeed(Feed),
     UpdateFeedFetchState {
@@ -24,31 +28,58 @@ pub enum DbCommand {
         feed_id: i64,
         unread_only: bool,
         saved_only: bool,
+        since: Option<i64>,
+        sort_mode: SortMode,
     },
     SearchEntries {
         feed_id: Option<i64>,
         query: String,
         unread_only: bool,
         saved_only: bool,
+        since: Option<i64>,
     },
     MarkRead {
         entry_id: i64,
         read_at: i64,
     },
     MarkUnread(i64),
+    MarkAllRead {
+        entry_ids: Vec<i64>,
+        read_at: i64,
+    },
+    MarkFeedRead {
+        feed_id: i64,
+        read_at: i64,
+    },
     MarkSaved {
         entry_id: i64,
         saved_at: i64,
     },
     MarkUnsaved(i64),
-    UnreadCountAll,
-    UnreadCountsByFeed,
+    UnreadCountAll { since: Option<i64> },
+    UnreadCountsByFeed { since: Option<i64> },
     CreateGroup(NewGroup),
     ListGroups,
     DeleteGroup(i64),
     RenameGroup { id: i64, name: String },
     SetFeedGroup { feed_id: i64, group_id: Option<i64> },
+    SwapGroupPositions { id_a: i64, id_b: i64 },
     CountEntriesForFeed(i64),
+    AllEntriesFiltered {
+        unread_only: bool,
+        saved_only: bool,
+        since: Option<i64>,
+        sort_mode: SortMode,
+    },
+    CountAllEntries,
+    EntriesForGroupFiltered {
+        group_id: Option<i64>,
+        unread_only: bool,
+        saved_only: bool,
+        since: Option<i64>,
+        sort_mode: SortMode,
+    },
+    CountEntriesForGroup(Option<i64>),
 }
 
 #[derive(Debug, Clone)]
@@ -104,7 +135,9 @@ impl DbWorker {
 fn run_worker(repo: Repo, rx: Receiver<DbRequest>) {
     for request in rx {
         let response = handle_command(&repo, request.command);
-        let _ = request.respond_to.send(response);
+        if request.respond_to.send(response).is_err() {
+            warn!("DB worker: caller disconnected before receiving response");
+        }
     }
 }
 
@@ -112,6 +145,9 @@ fn handle_command(repo: &Repo, command: DbCommand) -> DbResponse {
     match command {
         DbCommand::CreateFeed(feed) => DbResponse::Feed(map_result(repo.create_feed(&feed))),
         DbCommand::DeleteFeed(feed_id) => DbResponse::Ok(map_result(repo.delete_feed(feed_id))),
+        DbCommand::RenameFeed { id, title } => {
+            DbResponse::Ok(map_result(repo.rename_feed(id, title.as_deref())))
+        }
         DbCommand::ListFeeds => DbResponse::Feeds(map_result(repo.list_feeds())),
         DbCommand::UpdateFeed(feed) => DbResponse::Ok(map_result(repo.update_feed(&feed))),
         DbCommand::UpdateFeedFetchState {
@@ -132,33 +168,45 @@ fn handle_command(repo: &Repo, command: DbCommand) -> DbResponse {
             feed_id,
             unread_only,
             saved_only,
+            since,
+            sort_mode,
         } => DbResponse::Entries(map_result(repo.entries_for_feed_filtered(
             feed_id,
             unread_only,
             saved_only,
+            since,
+            sort_mode,
         ))),
         DbCommand::SearchEntries {
             feed_id,
             query,
             unread_only,
             saved_only,
+            since,
         } => DbResponse::Entries(map_result(repo.search_entries(
             feed_id,
             &query,
             unread_only,
             saved_only,
+            since,
         ))),
         DbCommand::MarkRead { entry_id, read_at } => {
             DbResponse::Ok(map_result(repo.mark_read(entry_id, read_at)))
         }
         DbCommand::MarkUnread(entry_id) => DbResponse::Ok(map_result(repo.mark_unread(entry_id))),
+        DbCommand::MarkAllRead { entry_ids, read_at } => {
+            DbResponse::Ok(map_result(repo.mark_all_read(&entry_ids, read_at)))
+        }
+        DbCommand::MarkFeedRead { feed_id, read_at } => {
+            DbResponse::Ok(map_result(repo.mark_feed_read(feed_id, read_at).map(|_| ())))
+        }
         DbCommand::MarkSaved { entry_id, saved_at } => {
             DbResponse::Ok(map_result(repo.mark_saved(entry_id, saved_at)))
         }
         DbCommand::MarkUnsaved(entry_id) => DbResponse::Ok(map_result(repo.mark_unsaved(entry_id))),
-        DbCommand::UnreadCountAll => DbResponse::Count(map_result(repo.unread_count_all())),
-        DbCommand::UnreadCountsByFeed => {
-            DbResponse::Counts(map_result(repo.unread_counts_by_feed()))
+        DbCommand::UnreadCountAll { since } => DbResponse::Count(map_result(repo.unread_count_all(since))),
+        DbCommand::UnreadCountsByFeed { since } => {
+            DbResponse::Counts(map_result(repo.unread_counts_by_feed(since)))
         }
         DbCommand::CreateGroup(group) => {
             DbResponse::Group(map_result(repo.create_group(&group)))
@@ -171,14 +219,50 @@ fn handle_command(repo: &Repo, command: DbCommand) -> DbResponse {
         DbCommand::SetFeedGroup { feed_id, group_id } => {
             DbResponse::Ok(map_result(repo.set_feed_group(feed_id, group_id)))
         }
+        DbCommand::SwapGroupPositions { id_a, id_b } => {
+            DbResponse::Ok(map_result(repo.swap_group_positions(id_a, id_b)))
+        }
         DbCommand::CountEntriesForFeed(feed_id) => {
             DbResponse::Count(map_result(repo.count_entries_for_feed(feed_id)))
+        }
+        DbCommand::EntriesForGroupFiltered {
+            group_id,
+            unread_only,
+            saved_only,
+            since,
+            sort_mode,
+        } => DbResponse::Entries(map_result(repo.entries_for_group_filtered(
+            group_id,
+            unread_only,
+            saved_only,
+            since,
+            sort_mode,
+        ))),
+        DbCommand::CountEntriesForGroup(group_id) => {
+            DbResponse::Count(map_result(repo.count_entries_for_group(group_id)))
+        }
+        DbCommand::AllEntriesFiltered {
+            unread_only,
+            saved_only,
+            since,
+            sort_mode,
+        } => DbResponse::Entries(map_result(repo.all_entries_filtered(
+            unread_only,
+            saved_only,
+            since,
+            sort_mode,
+        ))),
+        DbCommand::CountAllEntries => {
+            DbResponse::Count(map_result(repo.count_all_entries()))
         }
     }
 }
 
 fn map_result<T>(result: rusqlite::Result<T>) -> DbResult<T> {
-    result.map_err(|error| error.to_string())
+    result.map_err(|error| {
+        warn!("SQLite error: {error}");
+        error.to_string()
+    })
 }
 
 #[cfg(test)]
