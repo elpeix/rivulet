@@ -4,7 +4,6 @@ use ratatui::style::{Color, Style};
 #[derive(Debug, Clone, Copy)]
 pub struct Theme {
     pub header_bg: Color,
-    pub header_fg: Color,
     pub border: Color,
     pub focus_border: Color,
     pub focus_title: Color,
@@ -26,7 +25,6 @@ impl Theme {
     pub fn default() -> Self {
         Self {
             header_bg: Color::Rgb(31, 31, 40),
-            header_fg: Color::Rgb(220, 215, 186),
             border: Color::Rgb(84, 84, 109),
             focus_border: Color::Rgb(126, 156, 216),
             focus_title: Color::Rgb(220, 215, 186),
@@ -77,10 +75,6 @@ impl Theme {
 
     pub fn block_style(&self) -> Style {
         Style::default().bg(self.block_bg)
-    }
-
-    pub fn header_style(&self) -> Style {
-        Style::default().fg(self.header_fg).bg(self.header_bg)
     }
 
     pub fn dim_style(&self) -> Style {

@@ -1,19 +1,14 @@
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 
 pub struct UiLayout {
-    pub header: Rect,
     pub columns: [Rect; 3],
     pub status: Rect,
 }
 
-pub fn layout_chunks(area: Rect, ratios: [u16; 3]) -> UiLayout {
+pub fn layout_chunks(area: Rect, ratios: [u16; 3], status_height: u16) -> UiLayout {
     let main = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(2),
-            Constraint::Min(1),
-            Constraint::Length(2),
-        ])
+        .constraints([Constraint::Min(1), Constraint::Length(status_height)])
         .split(area);
 
     let columns = Layout::default()
@@ -23,12 +18,11 @@ pub fn layout_chunks(area: Rect, ratios: [u16; 3]) -> UiLayout {
             Constraint::Percentage(ratios[1]),
             Constraint::Percentage(ratios[2]),
         ])
-        .split(main[1]);
+        .split(main[0]);
 
     UiLayout {
-        header: main[0],
         columns: [columns[0], columns[1], columns[2]],
-        status: main[2],
+        status: main[1],
     }
 }
 

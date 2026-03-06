@@ -302,67 +302,15 @@ pub fn preview_block(theme: &Theme, focused: bool) -> Block<'_> {
 
 const SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
-pub fn status_bar<'a>(state: &AppState, theme: &Theme, lang: &Lang) -> Paragraph<'a> {
-    let mut spans = Vec::new();
-    let total = format!("{}: {}", lang.unread_label, state.total_unread);
-    spans.push(Span::styled(total, Style::default().fg(theme.text)));
-
-    if state.refreshing {
-        let frame = SPINNER_FRAMES[state.tick % SPINNER_FRAMES.len()];
-        spans.push(Span::raw("  "));
-        spans.push(Span::styled(
-            format!("{} {}", frame, lang.refreshing),
-            Style::default().fg(theme.accent_alt),
-        ));
-    }
-
-    if let Some(status) = state.status.as_ref() {
-        let color = if status.kind == StatusKind::Error {
-            theme.status_err
-        } else {
-            theme.status_ok
-        };
-        spans.push(Span::raw("  |  "));
-        spans.push(Span::styled(
-            status.message.clone(),
-            Style::default().fg(color),
-        ));
-    }
-
-    spans.push(Span::raw("  |  "));
-    spans.push(Span::styled(lang.status_bar_hint, theme.dim_style()));
-
-    Paragraph::new(Line::from(spans))
-        .block(Block::default().borders(Borders::TOP))
-        .wrap(Wrap { trim: true })
-        .style(Style::default().fg(theme.text).bg(theme.header_bg))
-}
-
-pub fn modal<'a>(title: &'a str, text: Text<'a>, theme: &'a Theme) -> Paragraph<'a> {
-    Paragraph::new(text)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
-                .title(title)
-                .border_style(theme.focus_border_style())
-                .title_style(theme.focus_title_style()),
-        )
-        .wrap(Wrap { trim: false })
-        .style(Style::default().fg(theme.text).bg(theme.block_bg))
-}
-
-pub fn header_bar<'a>(
+pub fn status_bar<'a>(
     state: &'a AppState,
     theme: &Theme,
     recent_days: i64,
     lang: &Lang,
+    width: u16,
 ) -> Paragraph<'a> {
-    let focus = match state.focus {
-        crate::app::state::Focus::Feeds => lang.feeds,
-        crate::app::state::Focus::Entries => lang.entries,
-        crate::app::state::Focus::Preview => lang.preview,
-    };
+    // Left spans: app name + version | feed | filter | search
+    let version = env!("CARGO_PKG_VERSION");
     let feed_title = state
         .selected_feed
         .and_then(|id| state.feeds.iter().find(|feed| feed.id == id))
@@ -387,9 +335,9 @@ pub fn header_bar<'a>(
     } else {
         filters.join(" + ")
     };
-    let mut spans = vec![
+    let mut left_spans = vec![
         Span::styled(
-            lang.app_name,
+            format!("{} v{}", lang.app_name, version),
             Style::default()
                 .fg(theme.accent)
                 .add_modifier(Modifier::BOLD),
@@ -398,21 +346,131 @@ pub fn header_bar<'a>(
         Span::styled(lang.feed_label, theme.dim_style()),
         Span::styled(feed_title, Style::default().fg(theme.text)),
         Span::styled("  |  ", theme.dim_style()),
-        Span::styled(lang.focus_label, theme.dim_style()),
-        Span::styled(focus, Style::default().fg(theme.accent_alt)),
-        Span::styled("  |  ", theme.dim_style()),
         Span::styled(lang.filter_label, theme.dim_style()),
         Span::styled(filter, Style::default().fg(theme.accent_alt)),
     ];
     if let Some(query) = state.search_query.as_deref()
         && !query.is_empty()
     {
-        spans.push(Span::styled("  |  ", theme.dim_style()));
-        spans.push(Span::styled(lang.search_label, theme.dim_style()));
-        spans.push(Span::styled(query, Style::default().fg(theme.accent)));
+        left_spans.push(Span::styled("  |  ", theme.dim_style()));
+        left_spans.push(Span::styled(lang.search_label, theme.dim_style()));
+        left_spans.push(Span::styled(query, Style::default().fg(theme.accent)));
     }
 
-    Paragraph::new(Line::from(spans)).style(theme.header_style())
+    // Right spans: unread | refreshing | status | help hint
+    let mut right_spans = Vec::new();
+    let total = format!("{}: {}", lang.unread_label, state.total_unread);
+    right_spans.push(Span::styled(total, Style::default().fg(theme.text)));
+
+    if state.refreshing {
+        let frame = SPINNER_FRAMES[state.tick % SPINNER_FRAMES.len()];
+        right_spans.push(Span::raw("  "));
+        right_spans.push(Span::styled(
+            format!("{} {}", frame, lang.refreshing),
+            Style::default().fg(theme.accent_alt),
+        ));
+    }
+
+    if let Some(status) = state.status.as_ref() {
+        let color = if status.kind == StatusKind::Error {
+            theme.status_err
+        } else {
+            theme.status_ok
+        };
+        right_spans.push(Span::raw("  |  "));
+        right_spans.push(Span::styled(
+            status.message.clone(),
+            Style::default().fg(color),
+        ));
+    }
+
+    right_spans.push(Span::raw("  |  "));
+    right_spans.push(Span::styled(lang.status_bar_hint, theme.dim_style()));
+
+    let left_width: usize = left_spans.iter().map(|s| s.width()).sum();
+    let right_width: usize = right_spans.iter().map(|s| s.width()).sum();
+    let available = width.saturating_sub(2) as usize;
+    let single_line = fits_single_line(left_width, right_width, available);
+
+    let lines = if single_line {
+        let padding = available.saturating_sub(left_width + right_width);
+        left_spans.push(Span::raw(" ".repeat(padding)));
+        left_spans.extend(right_spans);
+        vec![Line::from(left_spans)]
+    } else {
+        vec![Line::from(left_spans), Line::from(right_spans)]
+    };
+
+    Paragraph::new(lines)
+        .block(Block::default().borders(Borders::TOP))
+        .style(Style::default().fg(theme.text).bg(theme.header_bg))
+}
+
+fn fits_single_line(left_width: usize, right_width: usize, available: usize) -> bool {
+    left_width + right_width + 2 <= available
+}
+
+pub fn status_bar_height(state: &AppState, recent_days: i64, lang: &Lang, width: u16) -> u16 {
+    let version = env!("CARGO_PKG_VERSION");
+    let feed_title = state
+        .selected_feed
+        .and_then(|id| state.feeds.iter().find(|feed| feed.id == id))
+        .and_then(|feed| {
+            feed.display_title()
+                .filter(|value| !value.is_empty())
+                .or(Some(feed.url.as_str()))
+        })
+        .unwrap_or(lang.no_feed_selected);
+    let mut left_w = format!("{} v{}", lang.app_name, version).len()
+        + "  |  ".len()
+        + lang.feed_label.len()
+        + feed_title.len()
+        + "  |  ".len()
+        + lang.filter_label.len();
+    if state.unread_only {
+        left_w += lang.filter_unread.len();
+    } else if state.saved_only {
+        left_w += lang.filter_saved.len();
+    } else if state.recent_only {
+        left_w += lang.filter_recent_days(recent_days).len();
+    } else {
+        left_w += lang.filter_all.len();
+    }
+    if let Some(query) = state.search_query.as_deref()
+        && !query.is_empty()
+    {
+        left_w += "  |  ".len() + lang.search_label.len() + query.len();
+    }
+
+    let mut right_w = format!("{}: {}", lang.unread_label, state.total_unread).len();
+    if state.refreshing {
+        right_w += 2 + 2 + lang.refreshing.len(); // "  " + spinner + " " + text
+    }
+    if let Some(status) = &state.status {
+        right_w += "  |  ".len() + status.message.len();
+    }
+    right_w += "  |  ".len() + lang.status_bar_hint.len();
+
+    let available = width.saturating_sub(2) as usize;
+    if fits_single_line(left_w, right_w, available) {
+        2
+    } else {
+        3
+    }
+}
+
+pub fn modal<'a>(title: &'a str, text: Text<'a>, theme: &'a Theme) -> Paragraph<'a> {
+    Paragraph::new(text)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .title(title)
+                .border_style(theme.focus_border_style())
+                .title_style(theme.focus_title_style()),
+        )
+        .wrap(Wrap { trim: false })
+        .style(Style::default().fg(theme.text).bg(theme.block_bg))
 }
 
 pub fn assign_group_modal_text(
