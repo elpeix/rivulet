@@ -33,6 +33,23 @@ pub enum InputMode {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LayoutMode {
+    /// Three columns: Feeds | Entries | Preview
+    Columns,
+    /// Two columns: Feeds | (Entries / Preview stacked)
+    Split,
+}
+
+impl LayoutMode {
+    pub fn toggle(self) -> Self {
+        match self {
+            Self::Columns => Self::Split,
+            Self::Split => Self::Columns,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SortMode {
     DateDesc,
     DateAsc,
@@ -96,6 +113,8 @@ pub struct AppState {
     pub feed_rows: Vec<FeedRow>,
     pub selected_feed_row_index: Option<usize>,
     pub panel_ratios: [u16; 3],
+    pub split_ratio: u16,
+    pub layout_mode: LayoutMode,
     pub status_set_at: Option<Instant>,
     pub total_entry_count: i64,
     pub viewing_group: bool,
@@ -151,6 +170,8 @@ impl Default for AppState {
             feed_rows: Vec::new(),
             selected_feed_row_index: None,
             panel_ratios: [20, 30, 50],
+            split_ratio: 50,
+            layout_mode: LayoutMode::Columns,
             status_set_at: None,
             total_entry_count: 0,
             viewing_group: false,
@@ -256,14 +277,10 @@ impl AppState {
                 Focus::Preview => self.scroll_preview(1),
             },
             Action::PageUp => {
-                if self.focus == Focus::Preview {
-                    self.scroll_preview(-10)
-                }
+                self.scroll_preview(-10);
             }
             Action::PageDown => {
-                if self.focus == Focus::Preview {
-                    self.scroll_preview(10)
-                }
+                self.scroll_preview(10);
             }
             Action::ScrollTop => {
                 if self.focus == Focus::Preview {
@@ -317,6 +334,9 @@ impl AppState {
             }
             Action::ResizePanel(delta) => {
                 self.resize_panel(delta);
+            }
+            Action::ToggleLayout => {
+                self.layout_mode = self.layout_mode.toggle();
             }
             Action::UpdateTotalEntryCount(count) => {
                 self.total_entry_count = count;
@@ -496,25 +516,57 @@ impl AppState {
     }
 
     fn resize_panel(&mut self, delta: i8) {
-        // L (delta>0) = grow focused panel, H (delta<0) = shrink focused panel
-        // Neighbour is always the adjacent panel to the right, except for Preview which uses Entries.
         let step = 5u16;
-        let idx = match self.focus {
-            Focus::Feeds => 0,
-            Focus::Entries => 1,
-            Focus::Preview => 2,
-        };
-        let neighbour = if idx < 2 { idx + 1 } else { 1 };
-        // For Preview (rightmost), H grows and L shrinks (directions are mirrored)
-        let growing = if idx == 2 { delta < 0 } else { delta > 0 };
-        let (grow, shrink) = if growing {
-            (idx, neighbour)
-        } else {
-            (neighbour, idx)
-        };
-        if self.panel_ratios[shrink] > step + 10 {
-            self.panel_ratios[grow] += step;
-            self.panel_ratios[shrink] -= step;
+        match self.layout_mode {
+            LayoutMode::Columns => {
+                // L (delta>0) = grow focused panel, H (delta<0) = shrink focused panel
+                // Neighbour is always the adjacent panel to the right, except for Preview which uses Entries.
+                let idx = match self.focus {
+                    Focus::Feeds => 0,
+                    Focus::Entries => 1,
+                    Focus::Preview => 2,
+                };
+                let neighbour = if idx < 2 { idx + 1 } else { 1 };
+                // For Preview (rightmost), H grows and L shrinks (directions are mirrored)
+                let growing = if idx == 2 { delta < 0 } else { delta > 0 };
+                let (grow, shrink) = if growing {
+                    (idx, neighbour)
+                } else {
+                    (neighbour, idx)
+                };
+                if self.panel_ratios[shrink] > step + 10 {
+                    self.panel_ratios[grow] += step;
+                    self.panel_ratios[shrink] -= step;
+                }
+            }
+            LayoutMode::Split => {
+                match self.focus {
+                    Focus::Feeds => {
+                        // Resize horizontal split between feeds and right column
+                        let growing = delta > 0;
+                        if growing && self.panel_ratios[1] > step + 10 {
+                            self.panel_ratios[0] += step;
+                            self.panel_ratios[1] -= step;
+                        } else if !growing && self.panel_ratios[0] > step + 10 {
+                            self.panel_ratios[0] -= step;
+                            self.panel_ratios[1] += step;
+                        }
+                    }
+                    Focus::Entries | Focus::Preview => {
+                        // Resize vertical split between entries and preview
+                        let growing = if self.focus == Focus::Preview {
+                            delta < 0
+                        } else {
+                            delta > 0
+                        };
+                        if growing && self.split_ratio < 90 {
+                            self.split_ratio += step;
+                        } else if !growing && self.split_ratio > 10 {
+                            self.split_ratio -= step;
+                        }
+                    }
+                }
+            }
         }
     }
 }

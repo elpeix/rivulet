@@ -7,14 +7,20 @@ use crate::ui;
 use crate::util::open::open_url;
 
 pub fn handle_mouse(app: &mut App, event: MouseEvent, area: ratatui::layout::Rect) {
-    let layout = ui::layout::layout_chunks(area, app.state.panel_ratios, 2);
+    let layout = ui::layout::build_layout(
+        area,
+        app.state.layout_mode,
+        app.state.panel_ratios,
+        app.state.split_ratio,
+        2,
+    );
     let (x, y) = (event.column, event.row);
 
     match event.kind {
         MouseEventKind::Down(MouseButton::Left) => {
-            if contains(layout.columns[0], x, y) {
+            if contains(layout.feeds, x, y) {
                 let _ = app.dispatch(Action::FocusFeeds);
-                if let Some(row_idx) = list_index(x, y, layout.columns[0], 1) {
+                if let Some(row_idx) = list_index(x, y, layout.feeds, 1) {
                     if let Some(row) = app.state.feed_rows.get(row_idx) {
                         match row {
                             FeedRow::AllFeeds => {
@@ -64,9 +70,9 @@ pub fn handle_mouse(app: &mut App, event: MouseEvent, area: ratatui::layout::Rec
                 return;
             }
 
-            if contains(layout.columns[1], x, y) {
+            if contains(layout.entries, x, y) {
                 let _ = app.dispatch(Action::FocusEntries);
-                if let Some(index) = list_index(x, y, layout.columns[1], 1)
+                if let Some(index) = list_index(x, y, layout.entries, 1)
                     && let Some(entry_id) = app.state.entries.get(index).map(|entry| entry.id)
                 {
                     app.state.reduce(Action::SelectEntry(Some(entry_id)));
@@ -74,7 +80,7 @@ pub fn handle_mouse(app: &mut App, event: MouseEvent, area: ratatui::layout::Rec
                 return;
             }
 
-            if contains(layout.columns[2], x, y) {
+            if contains(layout.preview, x, y) {
                 let _ = app.dispatch(Action::FocusPreview);
                 if let Some(url) = hit_test_link(app, x, y) {
                     match open_url(&url) {
@@ -91,12 +97,12 @@ pub fn handle_mouse(app: &mut App, event: MouseEvent, area: ratatui::layout::Rec
             }
         }
         MouseEventKind::ScrollUp => {
-            if contains(layout.columns[1], x, y) {
+            if contains(layout.entries, x, y) {
                 let _ = app.dispatch(Action::FocusEntries);
                 for _ in 0..3 {
                     let _ = app.dispatch(Action::MoveUp);
                 }
-            } else if contains(layout.columns[2], x, y) {
+            } else if contains(layout.preview, x, y) {
                 let _ = app.dispatch(Action::FocusPreview);
                 for _ in 0..3 {
                     let _ = app.dispatch(Action::MoveUp);
@@ -104,12 +110,12 @@ pub fn handle_mouse(app: &mut App, event: MouseEvent, area: ratatui::layout::Rec
             }
         }
         MouseEventKind::ScrollDown => {
-            if contains(layout.columns[1], x, y) {
+            if contains(layout.entries, x, y) {
                 let _ = app.dispatch(Action::FocusEntries);
                 for _ in 0..3 {
                     let _ = app.dispatch(Action::MoveDown);
                 }
-            } else if contains(layout.columns[2], x, y) {
+            } else if contains(layout.preview, x, y) {
                 let _ = app.dispatch(Action::FocusPreview);
                 for _ in 0..3 {
                     let _ = app.dispatch(Action::MoveDown);

@@ -34,6 +34,15 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
                 app.state.selected_link_index = Some(prev);
             }
         }
+        KeyCode::Char('1') => {
+            let _ = app.dispatch(Action::FocusFeeds);
+        }
+        KeyCode::Char('2') => {
+            let _ = app.dispatch(Action::FocusEntries);
+        }
+        KeyCode::Char('3') => {
+            let _ = app.dispatch(Action::FocusPreview);
+        }
         KeyCode::Left | KeyCode::Char('h') => match app.state.focus {
             Focus::Preview => {
                 app.state.selected_link_index = None;
@@ -58,6 +67,10 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
         }
         KeyCode::Char('L') => {
             let _ = app.dispatch(Action::ResizePanel(1));
+        }
+        KeyCode::Char('w') => {
+            let _ = app.dispatch(Action::ToggleLayout);
+            crate::config::Config::save_layout(app.state.layout_mode);
         }
         KeyCode::Up | KeyCode::Char('k') => {
             let _ = app.dispatch(Action::MoveUp);

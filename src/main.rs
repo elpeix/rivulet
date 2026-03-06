@@ -222,6 +222,7 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io::Result<
         DbWorker::start(&db_path).map_err(|error| io::Error::other(format!("DB: {error:?}")))?;
     let mut app = App::new(db, lang, config.recent_days)
         .map_err(|error| io::Error::other(format!("App: {error}")))?;
+    app.state.layout_mode = config.layout_mode();
     let theme = Theme::default();
 
     info!(

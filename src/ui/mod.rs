@@ -14,7 +14,7 @@ use ratatui::widgets::{
 use crate::app::state::AppState;
 use crate::fetch::discovery::DiscoveredFeed;
 use crate::i18n::Lang;
-use crate::ui::layout::{centered_rect, layout_chunks};
+use crate::ui::layout::{build_layout, centered_rect};
 use crate::ui::theme::Theme;
 use crate::ui::widgets::{
     assign_group_modal_text, entries_list, feeds_list, manage_groups_modal_text, modal,
@@ -63,11 +63,17 @@ pub fn draw(
 ) {
     let area = frame.area();
     let sh = status_bar_height(state, recent_days, lang, area.width);
-    let layout = layout_chunks(area, state.panel_ratios, sh);
+    let layout = build_layout(
+        area,
+        state.layout_mode,
+        state.panel_ratios,
+        state.split_ratio,
+        sh,
+    );
 
-    draw_feeds_panel(frame, state, theme, layout.columns[0], lang);
-    draw_entries_panel(frame, state, theme, layout.columns[1], lang);
-    draw_preview_panel(frame, state, theme, layout.columns[2], lang);
+    draw_feeds_panel(frame, state, theme, layout.feeds, lang);
+    draw_entries_panel(frame, state, theme, layout.entries, lang);
+    draw_preview_panel(frame, state, theme, layout.preview, lang);
 
     let status = status_bar(state, theme, recent_days, lang, area.width);
     frame.render_widget(status, layout.status);
@@ -437,7 +443,13 @@ fn draw_help_modal(frame: &mut Frame<'_>, theme: &Theme, area: Rect, scroll: u16
             "Enter",
             lang.help_select_open,
         ),
-        row("Space", lang.help_collapse_category, "Esc", lang.help_back),
+        row(
+            "Space",
+            lang.help_collapse_category,
+            "w",
+            lang.help_toggle_layout,
+        ),
+        row("1 / 2 / 3", lang.help_jump_panel, "Esc", lang.help_back),
         Line::from(""),
         heading(lang.help_feeds),
         separator.clone(),

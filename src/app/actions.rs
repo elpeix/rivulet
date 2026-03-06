@@ -80,6 +80,7 @@ pub enum Action {
     },
     ToggleGroupCollapse(i64),
     ResizePanel(i8),
+    ToggleLayout,
     UpdateTotalEntryCount(i64),
     AddDiscoveredFeed {
         url: String,

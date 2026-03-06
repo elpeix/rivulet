@@ -1,6 +1,17 @@
 use serde::Deserialize;
 use std::path::PathBuf;
 
+use crate::app::state::LayoutMode;
+
+impl LayoutMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Columns => "columns",
+            Self::Split => "split",
+        }
+    }
+}
+
 #[derive(Debug, Deserialize)]
 pub struct Config {
     #[serde(default = "default_language")]
@@ -9,6 +20,12 @@ pub struct Config {
     pub refresh_minutes: u64,
     #[serde(default = "default_recent_days")]
     pub recent_days: i64,
+    #[serde(default = "default_layout")]
+    pub layout: String,
+}
+
+fn default_layout() -> String {
+    "columns".to_string()
 }
 
 fn default_refresh_minutes() -> u64 {
@@ -29,6 +46,7 @@ impl Default for Config {
             language: default_language(),
             refresh_minutes: default_refresh_minutes(),
             recent_days: default_recent_days(),
+            layout: default_layout(),
         }
     }
 }
@@ -42,6 +60,44 @@ fn config_dir() -> Option<PathBuf> {
 }
 
 impl Config {
+    pub fn layout_mode(&self) -> LayoutMode {
+        match self.layout.as_str() {
+            "split" => LayoutMode::Split,
+            _ => LayoutMode::Columns,
+        }
+    }
+
+    pub fn save_layout(mode: LayoutMode) {
+        let Some(dir) = config_dir() else { return };
+        let path = dir.join("config.toml");
+        let contents = std::fs::read_to_string(&path).unwrap_or_default();
+        let value = mode.as_str();
+        let new_line = format!("layout = \"{value}\"");
+        let mut found = false;
+        let new_contents: String = contents
+            .lines()
+            .map(|line| {
+                if line.trim_start().starts_with("layout") && line.contains('=') {
+                    found = true;
+                    new_line.as_str()
+                } else {
+                    line
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        let new_contents = if found {
+            if contents.ends_with('\n') {
+                format!("{new_contents}\n")
+            } else {
+                new_contents
+            }
+        } else {
+            format!("{contents}{new_line}\n")
+        };
+        let _ = std::fs::write(&path, new_contents);
+    }
+
     pub fn load() -> Self {
         let Some(dir) = config_dir() else {
             return Self::default();
