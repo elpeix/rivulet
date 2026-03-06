@@ -1,3 +1,4 @@
+use crate::fetch::discovery::DiscoveredFeed;
 use crate::store::models::{Entry, Feed, Group};
 
 #[derive(Debug, Clone)]
@@ -80,4 +81,12 @@ pub enum Action {
     ToggleGroupCollapse(i64),
     ResizePanel(i8),
     UpdateTotalEntryCount(i64),
+    AddDiscoveredFeed {
+        url: String,
+        group_id: Option<i64>,
+    },
+    DiscoveryResult {
+        feeds: Vec<DiscoveredFeed>,
+        group_id: Option<i64>,
+    },
 }

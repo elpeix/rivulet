@@ -17,6 +17,7 @@ A terminal RSS reader built with Rust and [ratatui](https://github.com/ratatui-o
 - **Mark read** — Mark individual entries, all visible, or entire feed as read
 - **Feed renaming** — Custom names with ability to restore the original
 - **Save for later** — Bookmark entries with `s`, filter saved with `g`
+- **Feed auto-discovery** — Paste a website URL and Rivulet finds the RSS/Atom feed automatically
 - **OPML import/export** — Migrate feeds from/to other RSS readers
 - **Auto-refresh** — Configurable periodic refresh (default: 30 min)
 - **i18n** — English and Catalan
@@ -36,7 +37,7 @@ Requires Rust 2024 edition (1.85+).
 rivulet
 ```
 
-Press `a` to add your first feed URL, then `r` to refresh.
+Press `a` to add a feed. You can paste either a direct feed URL or a website URL — Rivulet will auto-discover the feed. Press `r` to refresh.
 
 ### OPML import/export
 

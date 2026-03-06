@@ -247,7 +247,11 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io::Result<
     let mut last_refresh = Instant::now();
 
     loop {
+        if app.refreshing() || app.discovering() {
+            app.state.tick = app.state.tick.wrapping_add(1);
+        }
         app.poll_refresh();
+        app.poll_discovery();
 
         // Auto-refresh feeds periodically
         if let Some(interval) = refresh_interval {

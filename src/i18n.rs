@@ -114,6 +114,11 @@ pub struct Lang {
     pub feed_label: &'static str,
     pub filter_label: &'static str,
     pub search_label: &'static str,
+
+    // Discovery
+    pub discovering: &'static str,
+    pub select_feed_title: &'static str,
+    pub select_feed_prompt: &'static str,
 }
 
 impl Lang {
@@ -227,6 +232,10 @@ impl Lang {
             feed_label: "Feed: ",
             filter_label: "Filter: ",
             search_label: "Search: ",
+
+            discovering: "Discovering feed...",
+            select_feed_title: "Select Feed",
+            select_feed_prompt: "Multiple feeds found. Select one:",
         }
     }
 
@@ -333,6 +342,10 @@ impl Lang {
             feed_label: "Font: ",
             filter_label: "Filtre: ",
             search_label: "Cerca: ",
+
+            discovering: "Descobrint feed...",
+            select_feed_title: "Selecciona feed",
+            select_feed_prompt: "S'han trobat múltiples feeds. Selecciona'n un:",
         }
     }
 
@@ -388,6 +401,13 @@ impl Lang {
         match self.code {
             "ca" => format!("Últims {days} dies"),
             _ => format!("Last {days} days"),
+        }
+    }
+
+    pub fn no_feed_found(&self, url: &str) -> String {
+        match self.code {
+            "ca" => format!("No s'ha trobat cap feed a: {url}"),
+            _ => format!("No feed found at: {url}"),
         }
     }
 }
