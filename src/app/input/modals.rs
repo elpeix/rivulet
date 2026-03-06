@@ -1,8 +1,8 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
+use crate::app::App;
 use crate::app::actions::Action;
 use crate::app::state::{AppState, InputMode};
-use crate::app::App;
 use crate::i18n::Lang;
 use crate::ui;
 
@@ -141,9 +141,7 @@ pub fn handle_input_mode(app: &mut App, key: KeyEvent) -> bool {
             let _ = app.dispatch(Action::SetStatus(prompt));
         }
         InputMode::DeleteFeed => {
-            let _ = app.dispatch(Action::SetStatus(
-                app.lang.delete_feed_confirm.to_string(),
-            ));
+            let _ = app.dispatch(Action::SetStatus(app.lang.delete_feed_confirm.to_string()));
         }
         _ => {}
     }
@@ -230,8 +228,7 @@ fn handle_assign_group(app: &mut App, key: KeyEvent) -> bool {
                     // "New category..." - switch to AddGroup mode
                     app.state.input_mode = InputMode::AddGroup;
                     app.state.modal_selection = 0;
-                    let _ =
-                        app.dispatch(Action::SetStatus(app.lang.new_group_name.to_string()));
+                    let _ = app.dispatch(Action::SetStatus(app.lang.new_group_name.to_string()));
                     return false;
                 }
             }
@@ -270,9 +267,7 @@ fn handle_manage_groups(app: &mut App, key: KeyEvent) -> bool {
             if let Some(group) = app.state.groups.get(app.state.modal_selection) {
                 let group_id = group.id;
                 app.state.input_mode = InputMode::DeleteGroup { group_id };
-                let _ = app.dispatch(Action::SetStatus(
-                    app.lang.delete_group_confirm.to_string(),
-                ));
+                let _ = app.dispatch(Action::SetStatus(app.lang.delete_group_confirm.to_string()));
             }
         }
         KeyCode::Char('r') => {
@@ -280,8 +275,7 @@ fn handle_manage_groups(app: &mut App, key: KeyEvent) -> bool {
                 app.state.input_mode = InputMode::RenameGroup;
                 app.state.input_buffer.clear();
                 app.state.input_buffer.push_str(&group.name);
-                let prompt =
-                    format!("{}{}", app.lang.rename_prompt, app.state.input_buffer);
+                let prompt = format!("{}{}", app.lang.rename_prompt, app.state.input_buffer);
                 let _ = app.dispatch(Action::SetStatus(prompt));
             }
         }
@@ -322,9 +316,7 @@ fn handle_group_text_input(app: &mut App, key: KeyEvent) -> bool {
     match key.code {
         KeyCode::Esc => {
             app.state.input_mode = InputMode::ManageGroups;
-            let _ = app.dispatch(Action::SetStatus(
-                app.lang.group_manage_hint.to_string(),
-            ));
+            let _ = app.dispatch(Action::SetStatus(app.lang.group_manage_hint.to_string()));
         }
         KeyCode::Enter => {
             let value = app.state.input_buffer.trim().to_string();
@@ -334,21 +326,16 @@ fn handle_group_text_input(app: &mut App, key: KeyEvent) -> bool {
                         let _ = app.dispatch(Action::AddGroup { name: value });
                     }
                     InputMode::RenameGroup => {
-                        if let Some(group) =
-                            app.state.groups.get(app.state.modal_selection)
-                        {
+                        if let Some(group) = app.state.groups.get(app.state.modal_selection) {
                             let id = group.id;
-                            let _ =
-                                app.dispatch(Action::RenameGroup { id, name: value });
+                            let _ = app.dispatch(Action::RenameGroup { id, name: value });
                         }
                     }
                     _ => {}
                 }
             }
             app.state.input_mode = InputMode::ManageGroups;
-            let _ = app.dispatch(Action::SetStatus(
-                app.lang.group_manage_hint.to_string(),
-            ));
+            let _ = app.dispatch(Action::SetStatus(app.lang.group_manage_hint.to_string()));
         }
         KeyCode::Backspace => {
             app.state.input_buffer.pop();
@@ -388,15 +375,11 @@ fn handle_delete_group(app: &mut App, key: KeyEvent, group_id: i64) -> bool {
                 app.state.modal_selection -= 1;
             }
             app.state.input_mode = InputMode::ManageGroups;
-            let _ = app.dispatch(Action::SetStatus(
-                app.lang.group_manage_hint.to_string(),
-            ));
+            let _ = app.dispatch(Action::SetStatus(app.lang.group_manage_hint.to_string()));
         }
         _ => {
             app.state.input_mode = InputMode::ManageGroups;
-            let _ = app.dispatch(Action::SetStatus(
-                app.lang.group_manage_hint.to_string(),
-            ));
+            let _ = app.dispatch(Action::SetStatus(app.lang.group_manage_hint.to_string()));
         }
     }
     false
@@ -436,11 +419,9 @@ pub fn current_modal(state: &AppState, lang: &Lang) -> Option<ui::Modal> {
                 lang.no_feed_selected.to_string()
             },
         }),
-        InputMode::AddFeedGroup { .. } | InputMode::AssignGroup => {
-            Some(ui::Modal::AssignGroup {
-                selection: state.modal_selection,
-            })
-        }
+        InputMode::AddFeedGroup { .. } | InputMode::AssignGroup => Some(ui::Modal::AssignGroup {
+            selection: state.modal_selection,
+        }),
         InputMode::ManageGroups | InputMode::DeleteGroup { .. } => Some(ui::Modal::ManageGroups {
             selection: state.modal_selection,
         }),

@@ -13,21 +13,21 @@ use std::time::{Duration, Instant};
 use log::info;
 
 use clap::{Parser, Subcommand};
+use crossterm::ExecutableCommand;
 use crossterm::event::{self, DisableMouseCapture, EnableMouseCapture, Event};
 use crossterm::terminal::{
-    disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
+    EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
-use crossterm::ExecutableCommand;
-use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
+use ratatui::backend::CrosstermBackend;
 
+use crate::app::App;
 use crate::app::actions::Action;
 use crate::app::events::DbWorker;
 use crate::app::input::{
     current_modal, handle_help_key, handle_input_mode, handle_key, handle_mouse,
 };
 use crate::app::state::InputMode;
-use crate::app::App;
 use crate::config::Config;
 use crate::i18n::Lang;
 use crate::ui::theme::Theme;
@@ -99,27 +99,30 @@ fn main() -> io::Result<()> {
 
 fn run_import(path: &std::path::Path) -> io::Result<()> {
     let mut file = std::fs::File::open(path)?;
-    let outlines = opml::parse_opml(&mut file)
-        .map_err(io::Error::other)?;
+    let outlines = opml::parse_opml(&mut file).map_err(io::Error::other)?;
 
     let db_path = data_dir()?.join("rivulet.db");
-    let repo = store::repo::Repo::open(&db_path)
-        .map_err(|e| io::Error::other(format!("DB: {e}")))?;
+    let repo =
+        store::repo::Repo::open(&db_path).map_err(|e| io::Error::other(format!("DB: {e}")))?;
 
-    let existing_feeds = repo.list_feeds()
+    let existing_feeds = repo
+        .list_feeds()
         .map_err(|e| io::Error::other(format!("DB: {e}")))?;
-    let existing_urls: std::collections::HashSet<String> = existing_feeds
-        .iter()
-        .map(|f| f.url.clone())
-        .collect();
+    let existing_urls: std::collections::HashSet<String> =
+        existing_feeds.iter().map(|f| f.url.clone()).collect();
 
-    let existing_groups = repo.list_groups()
+    let existing_groups = repo
+        .list_groups()
         .map_err(|e| io::Error::other(format!("DB: {e}")))?;
     let mut group_map: std::collections::HashMap<String, i64> = existing_groups
         .iter()
         .map(|g| (g.name.clone(), g.id))
         .collect();
-    let mut max_pos = existing_groups.iter().map(|g| g.position).max().unwrap_or(-1);
+    let mut max_pos = existing_groups
+        .iter()
+        .map(|g| g.position)
+        .max()
+        .unwrap_or(-1);
 
     let now = util::time::now_timestamp();
     let mut imported = 0;
@@ -141,7 +144,8 @@ fn run_import(path: &std::path::Path) -> io::Result<()> {
                     position: max_pos,
                     created_at: now,
                 };
-                let group = repo.create_group(&new_group)
+                let group = repo
+                    .create_group(&new_group)
                     .map_err(|e| io::Error::other(format!("DB: {e}")))?;
                 group_map.insert(group_name.clone(), group.id);
                 Some(group.id)
@@ -155,7 +159,8 @@ fn run_import(path: &std::path::Path) -> io::Result<()> {
             url: outline.url.clone(),
             created_at: now,
         };
-        let feed = repo.create_feed(&new_feed)
+        let feed = repo
+            .create_feed(&new_feed)
             .map_err(|e| io::Error::other(format!("DB: {e}")))?;
 
         if let Some(gid) = group_id {
@@ -172,12 +177,14 @@ fn run_import(path: &std::path::Path) -> io::Result<()> {
 
 fn run_export(path: Option<&std::path::Path>) -> io::Result<()> {
     let db_path = data_dir()?.join("rivulet.db");
-    let repo = store::repo::Repo::open(&db_path)
-        .map_err(|e| io::Error::other(format!("DB: {e}")))?;
+    let repo =
+        store::repo::Repo::open(&db_path).map_err(|e| io::Error::other(format!("DB: {e}")))?;
 
-    let feeds = repo.list_feeds()
+    let feeds = repo
+        .list_feeds()
         .map_err(|e| io::Error::other(format!("DB: {e}")))?;
-    let groups = repo.list_groups()
+    let groups = repo
+        .list_groups()
         .map_err(|e| io::Error::other(format!("DB: {e}")))?;
 
     if let Some(path) = path {
@@ -197,9 +204,11 @@ fn data_dir() -> io::Result<std::path::PathBuf> {
         .map(std::path::PathBuf::from)
         .ok()
         .or_else(|| dirs::home_dir().map(|h| h.join(".local").join("share")))
-        .ok_or_else(|| io::Error::other(
-            "Cannot determine data directory: neither $XDG_DATA_HOME nor $HOME is set"
-        ))?;
+        .ok_or_else(|| {
+            io::Error::other(
+                "Cannot determine data directory: neither $XDG_DATA_HOME nor $HOME is set",
+            )
+        })?;
     let dir = base.join("rivulet");
     std::fs::create_dir_all(&dir)?;
     Ok(dir)
@@ -209,13 +218,16 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io::Result<
     let config = Config::load();
     let lang = Lang::from_code(&config.language);
     let db_path = data_dir()?.join("rivulet.db");
-    let db = DbWorker::start(&db_path)
-        .map_err(|error| io::Error::other(format!("DB: {error:?}")))?;
+    let db =
+        DbWorker::start(&db_path).map_err(|error| io::Error::other(format!("DB: {error:?}")))?;
     let mut app = App::new(db, lang, config.recent_days)
         .map_err(|error| io::Error::other(format!("App: {error}")))?;
     let theme = Theme::default();
 
-    info!("Rivulet started (lang={}, recent_days={})", config.language, config.recent_days);
+    info!(
+        "Rivulet started (lang={}, recent_days={})",
+        config.language, config.recent_days
+    );
     let _ = app.dispatch(Action::LoadGroups);
     let _ = app.dispatch(Action::LoadFeeds);
     let _ = app.dispatch(Action::RefreshUnreadCounts);
@@ -258,7 +270,16 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io::Result<
 
         app.state.flush_feed_rows();
         let modal_state = current_modal(&app.state, &app.lang);
-        terminal.draw(|frame| ui::draw(frame, &mut app.state, &theme, modal_state, app.recent_days, &app.lang))?;
+        terminal.draw(|frame| {
+            ui::draw(
+                frame,
+                &mut app.state,
+                &theme,
+                modal_state,
+                app.recent_days,
+                &app.lang,
+            )
+        })?;
 
         if event::poll(Duration::from_millis(250))? {
             match event::read()? {

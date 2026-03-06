@@ -1,11 +1,10 @@
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 
+use crate::app::App;
 use crate::app::actions::Action;
 use crate::app::state::FeedRow;
-use crate::app::App;
 use crate::ui;
 use crate::util::open::open_url;
-
 
 pub fn handle_mouse(app: &mut App, event: MouseEvent, area: ratatui::layout::Rect) {
     let layout = ui::layout::layout_chunks(area, app.state.panel_ratios);
@@ -80,9 +79,9 @@ pub fn handle_mouse(app: &mut App, event: MouseEvent, area: ratatui::layout::Rec
                 if let Some(url) = hit_test_link(app, x, y) {
                     match open_url(&url) {
                         Ok(()) => {
-                            let _ = app.dispatch(
-                                Action::SetStatus(app.lang.opened_in_browser.to_string()),
-                            );
+                            let _ = app.dispatch(Action::SetStatus(
+                                app.lang.opened_in_browser.to_string(),
+                            ));
                         }
                         Err(error) => {
                             let _ = app.dispatch(Action::DbError(error));
@@ -128,12 +127,7 @@ fn contains(area: ratatui::layout::Rect, x: u16, y: u16) -> bool {
         && y < area.y.saturating_add(area.height)
 }
 
-fn list_index(
-    x: u16,
-    y: u16,
-    panel: ratatui::layout::Rect,
-    row_height: u16,
-) -> Option<usize> {
+fn list_index(x: u16, y: u16, panel: ratatui::layout::Rect, row_height: u16) -> Option<usize> {
     let inner = ratatui::layout::Rect {
         x: panel.x.saturating_add(1),
         y: panel.y.saturating_add(1),

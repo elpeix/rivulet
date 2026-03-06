@@ -128,9 +128,5 @@ pub fn normalize_content_text(content: Option<&str>, summary: Option<&str>) -> O
         return None;
     }
     let text = crate::util::html::to_text(trimmed);
-    if text.is_empty() {
-        None
-    } else {
-        Some(text)
-    }
+    if text.is_empty() { None } else { Some(text) }
 }

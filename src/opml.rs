@@ -13,10 +13,8 @@ pub fn export_opml(
     feeds: &[Feed],
     groups: &[Group],
 ) -> std::io::Result<()> {
-    let group_map: std::collections::HashMap<i64, &str> = groups
-        .iter()
-        .map(|g| (g.id, g.name.as_str()))
-        .collect();
+    let group_map: std::collections::HashMap<i64, &str> =
+        groups.iter().map(|g| (g.id, g.name.as_str())).collect();
 
     // Group feeds by category
     let mut categorized: std::collections::BTreeMap<String, Vec<&Feed>> =
@@ -26,10 +24,7 @@ pub fn export_opml(
     for feed in feeds {
         if let Some(gid) = feed.group_id {
             if let Some(name) = group_map.get(&gid) {
-                categorized
-                    .entry(name.to_string())
-                    .or_default()
-                    .push(feed);
+                categorized.entry(name.to_string()).or_default().push(feed);
             } else {
                 ungrouped.push(feed);
             }
@@ -40,15 +35,14 @@ pub fn export_opml(
 
     writeln!(writer, r#"<?xml version="1.0" encoding="UTF-8"?>"#)?;
     writeln!(writer, r#"<opml version="2.0">"#)?;
-    writeln!(writer, r"  <head><title>Rivulet Subscriptions</title></head>")?;
+    writeln!(
+        writer,
+        r"  <head><title>Rivulet Subscriptions</title></head>"
+    )?;
     writeln!(writer, r"  <body>")?;
 
     for (group_name, group_feeds) in &categorized {
-        writeln!(
-            writer,
-            r#"    <outline text="{}">"#,
-            escape_xml(group_name)
-        )?;
+        writeln!(writer, r#"    <outline text="{}">"#, escape_xml(group_name))?;
         for feed in group_feeds {
             write_feed_outline(writer, feed, "      ")?;
         }
@@ -66,9 +60,7 @@ pub fn export_opml(
 }
 
 fn write_feed_outline(writer: &mut impl Write, feed: &Feed, indent: &str) -> std::io::Result<()> {
-    let title = feed
-        .display_title()
-        .unwrap_or(&feed.url);
+    let title = feed.display_title().unwrap_or(&feed.url);
     writeln!(
         writer,
         r#"{}<outline type="rss" text="{}" xmlUrl="{}" />"#,
@@ -84,8 +76,8 @@ pub fn parse_opml(reader: &mut impl Read) -> Result<Vec<OpmlOutline>, String> {
         .read_to_string(&mut xml)
         .map_err(|e| format!("Failed to read OPML: {e}"))?;
 
-    let doc = roxmltree::Document::parse(&xml)
-        .map_err(|e| format!("Failed to parse OPML XML: {e}"))?;
+    let doc =
+        roxmltree::Document::parse(&xml).map_err(|e| format!("Failed to parse OPML XML: {e}"))?;
 
     let body = doc
         .descendants()
@@ -94,8 +86,13 @@ pub fn parse_opml(reader: &mut impl Read) -> Result<Vec<OpmlOutline>, String> {
 
     let mut outlines = Vec::new();
 
-    for node in body.children().filter(|n| n.tag_name().name().eq_ignore_ascii_case("outline")) {
-        let xml_url = node.attribute("xmlUrl").or_else(|| node.attribute("xmlurl"));
+    for node in body
+        .children()
+        .filter(|n| n.tag_name().name().eq_ignore_ascii_case("outline"))
+    {
+        let xml_url = node
+            .attribute("xmlUrl")
+            .or_else(|| node.attribute("xmlurl"));
         let text = node.attribute("text");
 
         if let Some(url) = xml_url {
@@ -108,8 +105,13 @@ pub fn parse_opml(reader: &mut impl Read) -> Result<Vec<OpmlOutline>, String> {
         } else {
             // Category outline — collect child feeds
             let group_name = text.map(std::string::ToString::to_string);
-            for child in node.children().filter(|n| n.tag_name().name().eq_ignore_ascii_case("outline")) {
-                let child_url = child.attribute("xmlUrl").or_else(|| child.attribute("xmlurl"));
+            for child in node
+                .children()
+                .filter(|n| n.tag_name().name().eq_ignore_ascii_case("outline"))
+            {
+                let child_url = child
+                    .attribute("xmlUrl")
+                    .or_else(|| child.attribute("xmlurl"));
                 let child_text = child.attribute("text");
                 if let Some(url) = child_url {
                     outlines.push(OpmlOutline {

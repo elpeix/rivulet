@@ -14,7 +14,10 @@ pub type DbResult<T> = Result<T, String>;
 pub enum DbCommand {
     CreateFeed(NewFeed),
     DeleteFeed(i64),
-    RenameFeed { id: i64, title: Option<String> },
+    RenameFeed {
+        id: i64,
+        title: Option<String>,
+    },
     ListFeeds,
     UpdateFeed(Feed),
     UpdateFeedFetchState {
@@ -56,14 +59,27 @@ pub enum DbCommand {
         saved_at: i64,
     },
     MarkUnsaved(i64),
-    UnreadCountAll { since: Option<i64> },
-    UnreadCountsByFeed { since: Option<i64> },
+    UnreadCountAll {
+        since: Option<i64>,
+    },
+    UnreadCountsByFeed {
+        since: Option<i64>,
+    },
     CreateGroup(NewGroup),
     ListGroups,
     DeleteGroup(i64),
-    RenameGroup { id: i64, name: String },
-    SetFeedGroup { feed_id: i64, group_id: Option<i64> },
-    SwapGroupPositions { id_a: i64, id_b: i64 },
+    RenameGroup {
+        id: i64,
+        name: String,
+    },
+    SetFeedGroup {
+        feed_id: i64,
+        group_id: Option<i64>,
+    },
+    SwapGroupPositions {
+        id_a: i64,
+        id_b: i64,
+    },
     CountEntriesForFeed(i64),
     AllEntriesFiltered {
         unread_only: bool,
@@ -197,20 +213,20 @@ fn handle_command(repo: &Repo, command: DbCommand) -> DbResponse {
         DbCommand::MarkAllRead { entry_ids, read_at } => {
             DbResponse::Ok(map_result(repo.mark_all_read(&entry_ids, read_at)))
         }
-        DbCommand::MarkFeedRead { feed_id, read_at } => {
-            DbResponse::Ok(map_result(repo.mark_feed_read(feed_id, read_at).map(|_| ())))
-        }
+        DbCommand::MarkFeedRead { feed_id, read_at } => DbResponse::Ok(map_result(
+            repo.mark_feed_read(feed_id, read_at).map(|_| ()),
+        )),
         DbCommand::MarkSaved { entry_id, saved_at } => {
             DbResponse::Ok(map_result(repo.mark_saved(entry_id, saved_at)))
         }
         DbCommand::MarkUnsaved(entry_id) => DbResponse::Ok(map_result(repo.mark_unsaved(entry_id))),
-        DbCommand::UnreadCountAll { since } => DbResponse::Count(map_result(repo.unread_count_all(since))),
+        DbCommand::UnreadCountAll { since } => {
+            DbResponse::Count(map_result(repo.unread_count_all(since)))
+        }
         DbCommand::UnreadCountsByFeed { since } => {
             DbResponse::Counts(map_result(repo.unread_counts_by_feed(since)))
         }
-        DbCommand::CreateGroup(group) => {
-            DbResponse::Group(map_result(repo.create_group(&group)))
-        }
+        DbCommand::CreateGroup(group) => DbResponse::Group(map_result(repo.create_group(&group))),
         DbCommand::ListGroups => DbResponse::Groups(map_result(repo.list_groups())),
         DbCommand::DeleteGroup(id) => DbResponse::Ok(map_result(repo.delete_group(id))),
         DbCommand::RenameGroup { id, name } => {
@@ -252,9 +268,7 @@ fn handle_command(repo: &Repo, command: DbCommand) -> DbResponse {
             since,
             sort_mode,
         ))),
-        DbCommand::CountAllEntries => {
-            DbResponse::Count(map_result(repo.count_all_entries()))
-        }
+        DbCommand::CountAllEntries => DbResponse::Count(map_result(repo.count_all_entries())),
     }
 }
 

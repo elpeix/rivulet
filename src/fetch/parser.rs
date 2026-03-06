@@ -63,10 +63,7 @@ pub fn map_entry(feed_id: i64, entry: &FeedEntry, fetched_at: i64) -> NewEntry {
         .map(|author| author.name.trim().to_string())
         .filter(|value| !value.is_empty());
 
-    let published_at = entry
-        .published
-        .or(entry.updated)
-        .map(|dt| dt.timestamp());
+    let published_at = entry.published.or(entry.updated).map(|dt| dt.timestamp());
 
     let hash = None; // computed later by NewEntry::normalized()
 
@@ -166,6 +163,9 @@ mod tests {
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].guid, "atom-1");
         assert_eq!(entries[0].title.as_deref(), Some("Atom Entry"));
-        assert_eq!(entries[0].url.as_deref(), Some("https://example.com/atom/1"));
+        assert_eq!(
+            entries[0].url.as_deref(),
+            Some("https://example.com/atom/1")
+        );
     }
 }

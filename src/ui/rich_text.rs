@@ -98,8 +98,7 @@ fn annotations_to_style(
                 style = style.add_modifier(Modifier::ITALIC);
             }
             RichAnnotation::Link(url) => {
-                let is_selected =
-                    selected_link_url.is_some_and(|sel| sel == url.as_str());
+                let is_selected = selected_link_url.is_some_and(|sel| sel == url.as_str());
                 if is_selected {
                     style = style
                         .fg(theme.highlight_fg)

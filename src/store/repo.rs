@@ -1,7 +1,7 @@
 use std::path::Path;
 
-use rusqlite::{params, Connection, OptionalExtension, Result};
 use rusqlite::types::Value;
+use rusqlite::{Connection, OptionalExtension, Result, params};
 
 use super::models::{Entry, Feed, Group, NewEntry, NewFeed, NewGroup};
 use super::schema::apply_migrations;
@@ -286,10 +286,14 @@ impl Repo {
         let mut counts = Vec::new();
         if let Some(ts) = since {
             let rows = stmt.query_map(params![ts], mapper)?;
-            for row in rows { counts.push(row?); }
+            for row in rows {
+                counts.push(row?);
+            }
         } else {
             let rows = stmt.query_map([], mapper)?;
-            for row in rows { counts.push(row?); }
+            for row in rows {
+                counts.push(row?);
+            }
         }
         Ok(counts)
     }
@@ -361,8 +365,10 @@ impl Repo {
         sql.push(';');
 
         let mut stmt = self.conn.prepare(&sql)?;
-        let refs: Vec<&dyn rusqlite::types::ToSql> =
-            values.iter().map(|v| v as &dyn rusqlite::types::ToSql).collect();
+        let refs: Vec<&dyn rusqlite::types::ToSql> = values
+            .iter()
+            .map(|v| v as &dyn rusqlite::types::ToSql)
+            .collect();
         let rows = stmt.query_map(refs.as_slice(), map_entry_row)?;
         collect_entries(rows)
     }
@@ -386,11 +392,8 @@ impl Repo {
     }
 
     pub fn count_all_entries(&self) -> Result<i64> {
-        self.conn.query_row(
-            "SELECT COUNT(*) FROM entries;",
-            [],
-            |row| row.get(0),
-        )
+        self.conn
+            .query_row("SELECT COUNT(*) FROM entries;", [], |row| row.get(0))
     }
 
     pub fn entries_for_group_filtered(
@@ -852,26 +855,17 @@ mod tests {
         repo.upsert_entries(&entries).unwrap();
 
         let desc = repo
-            .entries_for_feed_filtered(
-                feed.id, false, false, None,
-                SortMode::DateDesc,
-            )
+            .entries_for_feed_filtered(feed.id, false, false, None, SortMode::DateDesc)
             .unwrap();
         assert_eq!(desc[0].title.as_deref(), Some("Apple"));
 
         let asc = repo
-            .entries_for_feed_filtered(
-                feed.id, false, false, None,
-                SortMode::DateAsc,
-            )
+            .entries_for_feed_filtered(feed.id, false, false, None, SortMode::DateAsc)
             .unwrap();
         assert_eq!(asc[0].title.as_deref(), Some("Banana"));
 
         let by_title = repo
-            .entries_for_feed_filtered(
-                feed.id, false, false, None,
-                SortMode::TitleAsc,
-            )
+            .entries_for_feed_filtered(feed.id, false, false, None, SortMode::TitleAsc)
             .unwrap();
         assert_eq!(by_title[0].title.as_deref(), Some("Apple"));
         assert_eq!(by_title[1].title.as_deref(), Some("Banana"));
@@ -881,12 +875,8 @@ mod tests {
     #[test]
     fn entries_for_group_filtered() {
         let repo = test_repo();
-        let feed1 = repo
-            .create_feed(&sample_feed("https://a.com/rss"))
-            .unwrap();
-        let feed2 = repo
-            .create_feed(&sample_feed("https://b.com/rss"))
-            .unwrap();
+        let feed1 = repo.create_feed(&sample_feed("https://a.com/rss")).unwrap();
+        let feed2 = repo.create_feed(&sample_feed("https://b.com/rss")).unwrap();
         let group = repo
             .create_group(&NewGroup {
                 name: "G".to_string(),
@@ -944,12 +934,8 @@ mod tests {
     #[test]
     fn all_entries_filtered() {
         let repo = test_repo();
-        let feed1 = repo
-            .create_feed(&sample_feed("https://a.com/rss"))
-            .unwrap();
-        let feed2 = repo
-            .create_feed(&sample_feed("https://b.com/rss"))
-            .unwrap();
+        let feed1 = repo.create_feed(&sample_feed("https://a.com/rss")).unwrap();
+        let feed2 = repo.create_feed(&sample_feed("https://b.com/rss")).unwrap();
         repo.upsert_entries(&[sample_entry(feed1.id, "g1", "A", 1)])
             .unwrap();
         repo.upsert_entries(&[sample_entry(feed2.id, "g2", "B", 2)])

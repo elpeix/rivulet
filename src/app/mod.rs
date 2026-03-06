@@ -3,8 +3,8 @@ pub mod events;
 pub mod input;
 pub mod state;
 
-use std::sync::mpsc::Receiver;
 use std::sync::Arc;
+use std::sync::mpsc::Receiver;
 
 use log::{error, info, warn};
 
@@ -76,7 +76,11 @@ impl App {
                 let response = self.db.send(DbCommand::ListFeeds)?;
                 self.handle_db_response(response);
             }
-            Action::AddFeed { title, url, group_id } => self.add_feed(title, url, group_id)?,
+            Action::AddFeed {
+                title,
+                url,
+                group_id,
+            } => self.add_feed(title, url, group_id)?,
             Action::RenameFeed { id, title } => {
                 self.send_and_handle(DbCommand::RenameFeed { id, title })?;
                 self.send_and_handle(DbCommand::ListFeeds)?;
@@ -88,13 +92,27 @@ impl App {
             Action::RefreshFeeds => self.refresh_feeds()?,
 
             // Entries
-            Action::LoadEntriesFiltered { feed_id, unread_only, saved_only, since } => {
+            Action::LoadEntriesFiltered {
+                feed_id,
+                unread_only,
+                saved_only,
+                since,
+            } => {
                 self.load_entries_for_feed(feed_id, unread_only, saved_only, since)?;
             }
-            Action::LoadAllEntries { unread_only, saved_only, since } => {
+            Action::LoadAllEntries {
+                unread_only,
+                saved_only,
+                since,
+            } => {
                 self.load_all_entries(unread_only, saved_only, since)?;
             }
-            Action::LoadEntriesForGroup { group_id, unread_only, saved_only, since } => {
+            Action::LoadEntriesForGroup {
+                group_id,
+                unread_only,
+                saved_only,
+                since,
+            } => {
                 self.load_entries_for_group(group_id, unread_only, saved_only, since)?;
             }
             Action::SetSearchQuery(query) => self.set_search_query(query)?,
@@ -108,25 +126,47 @@ impl App {
                 self.send_and_handle(DbCommand::UnreadCountAll { since })?;
             }
             Action::MarkRead(id) => {
-                self.send_and_handle(DbCommand::MarkRead { entry_id: id, read_at: now_timestamp() })?;
+                self.send_and_handle(DbCommand::MarkRead {
+                    entry_id: id,
+                    read_at: now_timestamp(),
+                })?;
             }
             Action::MarkUnread(id) => self.send_and_handle(DbCommand::MarkUnread(id))?,
             Action::MarkAllRead(ids) => {
-                self.send_and_handle(DbCommand::MarkAllRead { entry_ids: ids, read_at: now_timestamp() })?;
+                self.send_and_handle(DbCommand::MarkAllRead {
+                    entry_ids: ids,
+                    read_at: now_timestamp(),
+                })?;
             }
             Action::MarkFeedRead(id) => {
-                self.send_and_handle(DbCommand::MarkFeedRead { feed_id: id, read_at: now_timestamp() })?;
+                self.send_and_handle(DbCommand::MarkFeedRead {
+                    feed_id: id,
+                    read_at: now_timestamp(),
+                })?;
             }
             Action::MarkSaved(id) => {
-                self.send_and_handle(DbCommand::MarkSaved { entry_id: id, saved_at: now_timestamp() })?;
+                self.send_and_handle(DbCommand::MarkSaved {
+                    entry_id: id,
+                    saved_at: now_timestamp(),
+                })?;
             }
             Action::MarkUnsaved(id) => self.send_and_handle(DbCommand::MarkUnsaved(id))?,
 
             // Groups
             Action::LoadGroups => self.send_and_handle(DbCommand::ListGroups)?,
             Action::AddGroup { name } => {
-                let max_pos = self.state.groups.iter().map(|g| g.position).max().unwrap_or(-1);
-                let new = NewGroup { name, position: max_pos + 1, created_at: now_timestamp() };
+                let max_pos = self
+                    .state
+                    .groups
+                    .iter()
+                    .map(|g| g.position)
+                    .max()
+                    .unwrap_or(-1);
+                let new = NewGroup {
+                    name,
+                    position: max_pos + 1,
+                    created_at: now_timestamp(),
+                };
                 self.send_and_handle(DbCommand::CreateGroup(new))?;
                 self.reload_groups_and_feeds()?;
             }
@@ -160,40 +200,75 @@ impl App {
         Ok(())
     }
 
-    fn add_feed(&mut self, title: Option<String>, url: String, group_id: Option<i64>) -> Result<(), DbWorkerError> {
+    fn add_feed(
+        &mut self,
+        title: Option<String>,
+        url: String,
+        group_id: Option<i64>,
+    ) -> Result<(), DbWorkerError> {
         if !is_valid_feed_url(&url) {
-            self.state.reduce(Action::DbError(self.lang.invalid_url(&url)));
+            self.state
+                .reduce(Action::DbError(self.lang.invalid_url(&url)));
             return Ok(());
         }
-        let feed = NewFeed { title, url: url.clone(), created_at: now_timestamp() };
+        let feed = NewFeed {
+            title,
+            url: url.clone(),
+            created_at: now_timestamp(),
+        };
         let response = self.db.send(DbCommand::CreateFeed(feed))?;
-        let new_feed_id = if let DbResponse::Feed(Ok(ref f)) = response { Some(f.id) } else { None };
+        let new_feed_id = if let DbResponse::Feed(Ok(ref f)) = response {
+            Some(f.id)
+        } else {
+            None
+        };
         self.handle_db_response(response);
         if let (Some(fid), Some(gid)) = (new_feed_id, group_id) {
-            self.send_and_handle(DbCommand::SetFeedGroup { feed_id: fid, group_id: Some(gid) })?;
+            self.send_and_handle(DbCommand::SetFeedGroup {
+                feed_id: fid,
+                group_id: Some(gid),
+            })?;
         }
         self.send_and_handle(DbCommand::ListFeeds)?;
         self.refresh_feeds()
     }
 
-    fn load_entries_for_feed(&mut self, feed_id: i64, unread_only: bool, saved_only: bool, since: Option<i64>) -> Result<(), DbWorkerError> {
+    fn load_entries_for_feed(
+        &mut self,
+        feed_id: i64,
+        unread_only: bool,
+        saved_only: bool,
+        since: Option<i64>,
+    ) -> Result<(), DbWorkerError> {
         self.state.viewing_group = false;
         if self.state.selected_feed != Some(feed_id) {
             self.state.reduce(Action::SelectFeed(Some(feed_id)));
         }
         let response = self.db.send(DbCommand::EntriesForFeedFiltered {
-            feed_id, unread_only, saved_only, since, sort_mode: self.state.sort_mode,
+            feed_id,
+            unread_only,
+            saved_only,
+            since,
+            sort_mode: self.state.sort_mode,
         })?;
         self.handle_db_response(response);
         self.refresh_entry_count(feed_id)
     }
 
-    fn load_all_entries(&mut self, unread_only: bool, saved_only: bool, since: Option<i64>) -> Result<(), DbWorkerError> {
+    fn load_all_entries(
+        &mut self,
+        unread_only: bool,
+        saved_only: bool,
+        since: Option<i64>,
+    ) -> Result<(), DbWorkerError> {
         self.state.viewing_group = true;
         self.state.selected_feed = None;
         self.state.selected_feed_index = None;
         let response = self.db.send(DbCommand::AllEntriesFiltered {
-            unread_only, saved_only, since, sort_mode: self.state.sort_mode,
+            unread_only,
+            saved_only,
+            since,
+            sort_mode: self.state.sort_mode,
         })?;
         self.handle_db_response(response);
         let count_resp = self.db.send(DbCommand::CountAllEntries)?;
@@ -203,12 +278,22 @@ impl App {
         Ok(())
     }
 
-    fn load_entries_for_group(&mut self, group_id: Option<i64>, unread_only: bool, saved_only: bool, since: Option<i64>) -> Result<(), DbWorkerError> {
+    fn load_entries_for_group(
+        &mut self,
+        group_id: Option<i64>,
+        unread_only: bool,
+        saved_only: bool,
+        since: Option<i64>,
+    ) -> Result<(), DbWorkerError> {
         self.state.viewing_group = true;
         self.state.selected_feed = None;
         self.state.selected_feed_index = None;
         let response = self.db.send(DbCommand::EntriesForGroupFiltered {
-            group_id, unread_only, saved_only, since, sort_mode: self.state.sort_mode,
+            group_id,
+            unread_only,
+            saved_only,
+            since,
+            sort_mode: self.state.sort_mode,
         })?;
         self.handle_db_response(response);
         let count_resp = self.db.send(DbCommand::CountEntriesForGroup(group_id))?;
@@ -224,13 +309,19 @@ impl App {
         if let Some(feed_id) = self.state.selected_feed {
             if self.state.search_query.is_some() {
                 self.send_and_handle(DbCommand::SearchEntries {
-                    feed_id: Some(feed_id), query, unread_only: self.state.unread_only,
-                    saved_only: self.state.saved_only, since,
+                    feed_id: Some(feed_id),
+                    query,
+                    unread_only: self.state.unread_only,
+                    saved_only: self.state.saved_only,
+                    since,
                 })?;
             } else {
                 self.send_and_handle(DbCommand::EntriesForFeedFiltered {
-                    feed_id, unread_only: self.state.unread_only,
-                    saved_only: self.state.saved_only, since, sort_mode: self.state.sort_mode,
+                    feed_id,
+                    unread_only: self.state.unread_only,
+                    saved_only: self.state.saved_only,
+                    since,
+                    sort_mode: self.state.sort_mode,
                 })?;
             }
         }
@@ -244,10 +335,14 @@ impl App {
             DbResponse::Counts(Ok(counts)) => self.state.reduce(Action::UpdateUnreadCounts(counts)),
             DbResponse::Count(Ok(total)) => self.state.reduce(Action::UpdateTotalUnread(total)),
             DbResponse::Feed(Ok(feed)) => {
-                self.state.reduce(Action::SetStatus(self.lang.feed_saved(&feed.url)));
+                self.state
+                    .reduce(Action::SetStatus(self.lang.feed_saved(&feed.url)));
             }
             DbResponse::Updated(Ok(count)) => {
-                self.state.reduce(Action::SetStatus(format!("{}: {}", self.lang.updated_entries, count)));
+                self.state.reduce(Action::SetStatus(format!(
+                    "{}: {}",
+                    self.lang.updated_entries, count
+                )));
             }
             DbResponse::Groups(Ok(groups)) => self.state.reduce(Action::GroupsLoaded(groups)),
             DbResponse::Ok(Ok(())) | DbResponse::Group(Ok(_)) => {}
@@ -350,14 +445,14 @@ impl App {
                             if let Some(body) = body {
                                 match parse_feed(&body) {
                                     Ok(parsed) => {
-                                        if let Some(feed) = feeds.iter().find(|f| f.id == job.feed_id)
+                                        if let Some(feed) =
+                                            feeds.iter().find(|f| f.id == job.feed_id)
                                             && let Some(title) = parsed
                                                 .title
                                                 .as_ref()
                                                 .map(|t| t.content.trim().to_string())
                                                 .filter(|value| !value.is_empty())
-                                                && feed.title.as_deref()
-                                                    != Some(title.as_str())
+                                            && feed.title.as_deref() != Some(title.as_str())
                                         {
                                             let mut updated_feed = feed.clone();
                                             updated_feed.title = Some(title);
@@ -373,8 +468,10 @@ impl App {
                                     }
                                     Err(error) => {
                                         errors += 1;
-                                        last_error =
-                                            Some(format!("Parse error for {}: {:?}", job.url, error));
+                                        last_error = Some(format!(
+                                            "Parse error for {}: {:?}",
+                                            job.url, error
+                                        ));
                                     }
                                 }
                             }

@@ -49,9 +49,17 @@ pub enum Focus {
 #[derive(Debug, Clone)]
 pub enum FeedRow {
     AllFeeds,
-    GroupHeader { group_id: i64, name: String, unread: i64 },
-    FeedItem { feed_index: usize },
-    UngroupedHeader { unread: i64 },
+    GroupHeader {
+        group_id: i64,
+        name: String,
+        unread: i64,
+    },
+    FeedItem {
+        feed_index: usize,
+    },
+    UngroupedHeader {
+        unread: i64,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -200,8 +208,7 @@ impl AppState {
             }
             Action::SelectEntry(entry_id) => {
                 self.selected_entry = entry_id;
-                self.selected_entry_index =
-                    entry_id.and_then(|id| self.entry_position(id));
+                self.selected_entry_index = entry_id.and_then(|id| self.entry_position(id));
                 self.preview_scroll = 0;
                 self.selected_link_index = None;
             }
@@ -238,10 +245,27 @@ impl AppState {
                 Focus::Entries => self.move_entry_selection(1),
                 Focus::Preview => self.scroll_preview(1),
             },
-            Action::PageUp => if self.focus == Focus::Preview { self.scroll_preview(-10) },
-            Action::PageDown => if self.focus == Focus::Preview { self.scroll_preview(10) },
-            Action::ScrollTop => if self.focus == Focus::Preview { self.preview_scroll = 0 },
-            Action::ScrollBottom => if self.focus == Focus::Preview { self.preview_scroll = u16::try_from(self.preview_content_len.saturating_sub(1)).unwrap_or(u16::MAX) },
+            Action::PageUp => {
+                if self.focus == Focus::Preview {
+                    self.scroll_preview(-10)
+                }
+            }
+            Action::PageDown => {
+                if self.focus == Focus::Preview {
+                    self.scroll_preview(10)
+                }
+            }
+            Action::ScrollTop => {
+                if self.focus == Focus::Preview {
+                    self.preview_scroll = 0
+                }
+            }
+            Action::ScrollBottom => {
+                if self.focus == Focus::Preview {
+                    self.preview_scroll = u16::try_from(self.preview_content_len.saturating_sub(1))
+                        .unwrap_or(u16::MAX)
+                }
+            }
             Action::UpdateUnreadCounts(counts) => {
                 self.unread_counts = counts.into_iter().collect();
                 self.feed_rows_dirty = true;
@@ -277,9 +301,9 @@ impl AppState {
                 }
                 self.rebuild_feed_rows();
                 // Stay on the group header after toggle
-                self.selected_feed_row_index = self.feed_rows.iter().position(|r| {
-                    matches!(r, FeedRow::GroupHeader { group_id: gid, .. } if *gid == group_id)
-                });
+                self.selected_feed_row_index = self.feed_rows.iter().position(
+                    |r| matches!(r, FeedRow::GroupHeader { group_id: gid, .. } if *gid == group_id),
+                );
             }
             Action::ResizePanel(delta) => {
                 self.resize_panel(delta);
@@ -368,8 +392,7 @@ impl AppState {
                 self.feed_rows.push(FeedRow::FeedItem { feed_index: i });
             }
             // Sync selected_feed_row_index (+1 offset for AllFeeds)
-            self.selected_feed_row_index =
-                self.selected_feed_index.map(|i| i + 1);
+            self.selected_feed_row_index = self.selected_feed_index.map(|i| i + 1);
             return;
         }
 
@@ -382,13 +405,17 @@ impl AppState {
         // Grouped mode
         for group in &self.groups {
             let group_feeds = feeds_by_group.get(&Some(group.id));
-            let unread: i64 = group_feeds
-                .map_or(0, |indices| {
-                    indices
-                        .iter()
-                        .map(|&i| self.unread_counts.get(&self.feeds[i].id).copied().unwrap_or(0))
-                        .sum()
-                });
+            let unread: i64 = group_feeds.map_or(0, |indices| {
+                indices
+                    .iter()
+                    .map(|&i| {
+                        self.unread_counts
+                            .get(&self.feeds[i].id)
+                            .copied()
+                            .unwrap_or(0)
+                    })
+                    .sum()
+            });
             self.feed_rows.push(FeedRow::GroupHeader {
                 group_id: group.id,
                 name: group.name.clone(),
@@ -407,7 +434,12 @@ impl AppState {
         if let Some(ungrouped) = feeds_by_group.get(&None) {
             let unread: i64 = ungrouped
                 .iter()
-                .map(|&i| self.unread_counts.get(&self.feeds[i].id).copied().unwrap_or(0))
+                .map(|&i| {
+                    self.unread_counts
+                        .get(&self.feeds[i].id)
+                        .copied()
+                        .unwrap_or(0)
+                })
                 .sum();
             self.feed_rows.push(FeedRow::UngroupedHeader { unread });
             for &fi in ungrouped {
@@ -463,7 +495,11 @@ impl AppState {
         let neighbour = if idx < 2 { idx + 1 } else { 1 };
         // For Preview (rightmost), H grows and L shrinks (directions are mirrored)
         let growing = if idx == 2 { delta < 0 } else { delta > 0 };
-        let (grow, shrink) = if growing { (idx, neighbour) } else { (neighbour, idx) };
+        let (grow, shrink) = if growing {
+            (idx, neighbour)
+        } else {
+            (neighbour, idx)
+        };
         if self.panel_ratios[shrink] > step + 10 {
             self.panel_ratios[grow] += step;
             self.panel_ratios[shrink] -= step;

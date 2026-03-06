@@ -378,15 +378,10 @@ impl Lang {
 
     pub fn refreshed_summary(&self, feeds: usize, entries: i64, errors: usize) -> String {
         match self.code {
-            "ca" => format!(
-                "Actualitzades {feeds} fonts ({entries} entrades, {errors} errors)"
-            ),
-            _ => format!(
-                "Refreshed {feeds} feeds ({entries} entries, {errors} errors)"
-            ),
+            "ca" => format!("Actualitzades {feeds} fonts ({entries} entrades, {errors} errors)"),
+            _ => format!("Refreshed {feeds} feeds ({entries} entries, {errors} errors)"),
         }
     }
-
 
     pub fn preview_panel_title(&self, current_line: usize, total: usize) -> String {
         format!("{} [{}/{}]", self.preview, current_line, total)
@@ -398,7 +393,6 @@ impl Lang {
             _ => format!("Last {days} days"),
         }
     }
-
 }
 
 #[cfg(test)]
