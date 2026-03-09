@@ -232,15 +232,16 @@ pub fn entries_list<'a>(
                     Style::default().fg(theme.status_ok),
                 ));
             }
+            let prefix_width = prefix.chars().count();
             let title_max = available
                 .saturating_sub(feed_col_width)
-                .saturating_sub(prefix.len())
+                .saturating_sub(prefix_width)
                 .saturating_sub(date_len)
                 .saturating_sub(1);
             let truncated = truncate_with_ellipsis(title, title_max);
             let padding = available
                 .saturating_sub(feed_col_width)
-                .saturating_sub(prefix.len())
+                .saturating_sub(prefix_width)
                 .saturating_sub(truncated.chars().count())
                 .saturating_sub(date_len);
             spans.push(Span::styled(truncated, title_style));
