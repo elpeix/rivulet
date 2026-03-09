@@ -9,13 +9,13 @@ license=('GPL-3.0-only')
 provides=('rivulet')
 conflicts=('rivulet')
 
-source_x86_64=("${url}/releases/download/v${pkgver}/rivulet-v${pkgver}-x86_64-unknown-linux-gnu.tar.gz")
-source_aarch64=("${url}/releases/download/v${pkgver}/rivulet-v${pkgver}-aarch64-unknown-linux-gnu.tar.gz")
+source_x86_64=("${url}/releases/download/v${pkgver}/rivulet-v${pkgver}-x86_64-linux-gnu.tar.gz")
+source_aarch64=("${url}/releases/download/v${pkgver}/rivulet-v${pkgver}-aarch64-linux-gnu.tar.gz")
 sha256sums_x86_64=('44b1db05c49ff4bfaf07689c3bb53f652d772380675e605c9f3a9b86713d064e')
 sha256sums_aarch64=('9f95b76060dda7520477c15e2bc0ded48aa5948092db1779e6b26cd21b3e678a')
 
 package() {
-    local _target="${CARCH}-unknown-linux-gnu"
+    local _target="${CARCH}-linux-gnu"
     cd "rivulet-v${pkgver}-${_target}"
     install -Dm755 "rivulet" "${pkgdir}/usr/bin/rivulet"
     install -Dm644 "LICENSE" "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"

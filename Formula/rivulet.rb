@@ -16,10 +16,10 @@ class Rivulet < Formula
 
   on_linux do
     if Hardware::CPU.arm?
-      url "https://github.com/elpeix/rivulet/releases/download/v#{version}/rivulet-v#{version}-aarch64-unknown-linux-gnu.tar.gz"
+      url "https://github.com/elpeix/rivulet/releases/download/v#{version}/rivulet-v#{version}-aarch64-linux-gnu.tar.gz"
       sha256 "9f95b76060dda7520477c15e2bc0ded48aa5948092db1779e6b26cd21b3e678a"
     else
-      url "https://github.com/elpeix/rivulet/releases/download/v#{version}/rivulet-v#{version}-x86_64-unknown-linux-gnu.tar.gz"
+      url "https://github.com/elpeix/rivulet/releases/download/v#{version}/rivulet-v#{version}-x86_64-linux-gnu.tar.gz"
       sha256 "44b1db05c49ff4bfaf07689c3bb53f652d772380675e605c9f3a9b86713d064e"
     end
   end
