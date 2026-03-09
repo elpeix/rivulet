@@ -1,2 +1,28 @@
+# Build
 /target
+
+# Data
 *.db
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# AI agents
+.claude/
+.cursor/
+.aider/
+.codeium/
+.continue/
+.copilot/
+
+# Env
+.env
+.env.*

@@ -33,7 +33,7 @@ use crate::i18n::Lang;
 use crate::ui::theme::Theme;
 
 #[derive(Parser)]
-#[command(name = "rivulet", about = "A terminal RSS reader")]
+#[command(name = "rivulet", version, about = "A terminal RSS reader")]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
@@ -223,11 +223,11 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io::Result<
     let mut app = App::new(db, lang, config.recent_days)
         .map_err(|error| io::Error::other(format!("App: {error}")))?;
     app.state.layout_mode = config.layout_mode();
-    let theme = Theme::default();
+    let theme = Theme::from_name(&config.theme);
 
     info!(
-        "Rivulet started (lang={}, recent_days={})",
-        config.language, config.recent_days
+        "Rivulet started (lang={}, theme={}, recent_days={})",
+        config.language, config.theme, config.recent_days
     );
     let _ = app.dispatch(Action::LoadGroups);
     let _ = app.dispatch(Action::LoadFeeds);
@@ -295,7 +295,9 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io::Result<
                     }
 
                     if app.state.input_mode != InputMode::None {
-                        if handle_input_mode(&mut app, key) {
+                        if handle_input_mode(&mut app, key)
+                            && app.state.input_mode != InputMode::Discovering
+                        {
                             app.state.input_mode = InputMode::None;
                             app.state.modal_selection = 0;
                         }

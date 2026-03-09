@@ -20,6 +20,7 @@ A terminal RSS reader built with Rust and [ratatui](https://github.com/ratatui-o
 - **Feed auto-discovery** — Paste a website URL and Rivulet finds the RSS/Atom feed automatically
 - **OPML import/export** — Migrate feeds from/to other RSS readers
 - **Auto-refresh** — Configurable periodic refresh (default: 30 min)
+- **Themes** — Dark, light, and terminal-adaptive themes
 - **i18n** — English and Catalan
 - **Local SQLite storage** — No external services required
 
@@ -102,9 +103,36 @@ language = "en"         # or "ca" for Catalan
 refresh_minutes = 30    # auto-refresh interval (0 to disable)
 recent_days = 30        # time filter window in days
 layout = "columns"      # or "split" for 2-column stacked layout
+theme = "dark"          # "dark", "light", "terminal", or custom name
 ```
 
 The config file is created automatically on first run.
+
+### Custom themes
+
+Create a TOML file in `~/.config/rivulet/themes/` with all 16 color fields. Colors can be hex (`#RRGGBB`) or named terminal colors (`blue`, `dark_gray`, `reset`, etc.).
+
+```toml
+# ~/.config/rivulet/themes/gruvbox.toml
+header_bg = "#282828"
+border = "#665c54"
+focus_border = "#458588"
+focus_title = "#ebdbb2"
+highlight_bg = "#458588"
+highlight_fg = "#ebdbb2"
+focus_bg = "#1d2021"
+block_bg = "#1d2021"
+feeds_bg = "#282828"
+preview_bg = "#1d2021"
+text = "#ebdbb2"
+dim = "#928374"
+status_ok = "#98971a"
+status_err = "#cc241d"
+accent = "#83a598"
+accent_alt = "#d79921"
+```
+
+Then set `theme = "gruvbox"` in `config.toml`. If the file is missing or has errors, Rivulet falls back to the built-in dark theme.
 
 ## License
 

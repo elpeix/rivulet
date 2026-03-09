@@ -84,10 +84,10 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
                 dispatch_load_entries(app);
             }
         }
-        KeyCode::PageUp => {
+        KeyCode::PageUp | KeyCode::Char('K') => {
             let _ = app.dispatch(Action::PageUp);
         }
-        KeyCode::PageDown => {
+        KeyCode::PageDown | KeyCode::Char('J') => {
             let _ = app.dispatch(Action::PageDown);
         }
         KeyCode::Home => {
@@ -180,9 +180,9 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
         KeyCode::Char('S') => {
             app.state.sort_mode = app.state.sort_mode.next();
             let label = match app.state.sort_mode {
-                crate::app::state::SortMode::DateDesc => app.lang.sort_date_desc,
-                crate::app::state::SortMode::DateAsc => app.lang.sort_date_asc,
-                crate::app::state::SortMode::TitleAsc => app.lang.sort_title_asc,
+                crate::app::state::SortMode::DateDesc => &app.lang.sort_date_desc,
+                crate::app::state::SortMode::DateAsc => &app.lang.sort_date_asc,
+                crate::app::state::SortMode::TitleAsc => &app.lang.sort_title_asc,
             };
             let _ = app.dispatch(Action::SetStatus(format!(
                 "{}: {}",
@@ -409,6 +409,24 @@ mod tests {
 
         handle_key(&mut app, key(KeyCode::Up));
         assert_eq!(app.state.selected_feed_row_index, Some(0));
+    }
+
+    #[test]
+    fn shift_j_scrolls_preview_down() {
+        let mut app = test_app();
+        app.state.preview_content_len = 20;
+        app.state.preview_scroll = 0;
+        handle_key(&mut app, key(KeyCode::Char('J')));
+        assert!(app.state.preview_scroll > 0);
+    }
+
+    #[test]
+    fn shift_k_scrolls_preview_up() {
+        let mut app = test_app();
+        app.state.preview_content_len = 20;
+        app.state.preview_scroll = 10;
+        handle_key(&mut app, key(KeyCode::Char('K')));
+        assert!(app.state.preview_scroll < 10);
     }
 }
 

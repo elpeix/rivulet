@@ -381,6 +381,7 @@ impl AppState {
         if let Some(entry) = self.entries.get(index) {
             self.selected_entry = Some(entry.id);
             self.selected_entry_index = Some(index);
+            self.preview_scroll = 0;
             self.selected_link_index = None;
         }
     }
@@ -733,6 +734,46 @@ mod tests {
         state.reduce(Action::ScrollBottom);
         assert_eq!(state.preview_scroll, 4);
         state.reduce(Action::ScrollTop);
+        assert_eq!(state.preview_scroll, 0);
+    }
+
+    #[test]
+    fn entry_change_resets_preview_scroll() {
+        let mut state = AppState::default();
+        state.entries = vec![
+            Entry {
+                id: 1,
+                feed_id: 1,
+                title: Some("A".into()),
+                url: None,
+                author: None,
+                content: None,
+                summary: None,
+                published_at: None,
+                fetched_at: 0,
+                read_at: None,
+                saved_at: None,
+            },
+            Entry {
+                id: 2,
+                feed_id: 1,
+                title: Some("B".into()),
+                url: None,
+                author: None,
+                content: None,
+                summary: None,
+                published_at: None,
+                fetched_at: 0,
+                read_at: None,
+                saved_at: None,
+            },
+        ];
+        state.focus = Focus::Entries;
+        state.selected_entry = Some(1);
+        state.selected_entry_index = Some(0);
+        state.preview_scroll = 15;
+        state.reduce(Action::MoveDown);
+        assert_eq!(state.selected_entry, Some(2));
         assert_eq!(state.preview_scroll, 0);
     }
 

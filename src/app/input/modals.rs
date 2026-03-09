@@ -78,7 +78,7 @@ pub fn handle_input_mode(app: &mut App, key: KeyEvent) -> bool {
             let _ = app.dispatch(Action::ClearStatus);
             return true;
         }
-        KeyCode::Char('y' | 'Y') if mode == InputMode::DeleteFeed => {
+        KeyCode::Char('y' | 'Y' | 's' | 'S') if mode == InputMode::DeleteFeed => {
             if let Some(feed_id) = app.state.selected_feed {
                 let _ = app.dispatch(Action::DeleteFeed(feed_id));
             }
@@ -556,6 +556,15 @@ mod tests {
         app.state.input_mode = InputMode::DeleteFeed;
         app.state.selected_feed = Some(1);
         let closed = handle_input_mode(&mut app, key(KeyCode::Char('y')));
+        assert!(closed);
+    }
+
+    #[test]
+    fn delete_feed_s_confirms_catalan() {
+        let mut app = test_app();
+        app.state.input_mode = InputMode::DeleteFeed;
+        app.state.selected_feed = Some(1);
+        let closed = handle_input_mode(&mut app, key(KeyCode::Char('s')));
         assert!(closed);
     }
 
