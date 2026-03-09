@@ -7,20 +7,20 @@ class Rivulet < Formula
   on_macos do
     if Hardware::CPU.arm?
       url "https://github.com/elpeix/rivulet/releases/download/v#{version}/rivulet-v#{version}-aarch64-apple-darwin.tar.gz"
-      sha256 "2cc07cc136affee112e9b352d595e6546daccec87622c13880038f129c4271a4"
+      sha256 "b2f90a38dbfb0dc53fe7e11ebcfbb1480a0374554466ad4b79c67dda56545572"
     else
       url "https://github.com/elpeix/rivulet/releases/download/v#{version}/rivulet-v#{version}-x86_64-apple-darwin.tar.gz"
-      sha256 "4ef8bde39c524049e141f2e6bb77fde19dc04ff95c85e2bf5dcb3c45b44500a0"
+      sha256 "c0a384f4600279cd410b35f3a41d4e5a0dc627c218be4905a850c171c42d984e"
     end
   end
 
   on_linux do
     if Hardware::CPU.arm?
       url "https://github.com/elpeix/rivulet/releases/download/v#{version}/rivulet-v#{version}-aarch64-linux-gnu.tar.gz"
-      sha256 "9f95b76060dda7520477c15e2bc0ded48aa5948092db1779e6b26cd21b3e678a"
+      sha256 "7a0642bfda20cc3f6f544a24fe937caf2c1adc3084c56b9df7c227c2f0b80b4d"
     else
       url "https://github.com/elpeix/rivulet/releases/download/v#{version}/rivulet-v#{version}-x86_64-linux-gnu.tar.gz"
-      sha256 "44b1db05c49ff4bfaf07689c3bb53f652d772380675e605c9f3a9b86713d064e"
+      sha256 "6907a1222a35a003669883a3e4b53b608481dc9e0e9f9bed3beedd2e177ba2ed"
     end
   end
 
