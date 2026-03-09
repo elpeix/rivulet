@@ -27,6 +27,12 @@ A terminal RSS reader built with Rust and [ratatui](https://github.com/ratatui-o
 ## Install
 
 ```sh
+cargo install rivulet-reader
+```
+
+Or from source:
+
+```sh
 cargo install --path .
 ```
 

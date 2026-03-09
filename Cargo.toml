@@ -1,6 +1,6 @@
 [package]
-name = "rivulet"
-version = "1.0.0"
+name = "rivulet-reader"
+version = "1.0.1"
 edition = "2024"
 rust-version = "1.85"
 license = "GPL-3.0-only"
@@ -9,6 +9,10 @@ repository = "https://github.com/elpeix/rivulet"
 readme = "README.md"
 keywords = ["rss", "tui", "terminal", "reader", "feed"]
 categories = ["command-line-utilities"]
+
+[[bin]]
+name = "rivulet"
+path = "src/main.rs"
 
 [dependencies]
 ratatui = "0.30"
