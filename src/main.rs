@@ -33,7 +33,7 @@ use crate::i18n::Lang;
 use crate::ui::theme::Theme;
 
 #[derive(Parser)]
-#[command(name = "rivulet", about = "A terminal RSS reader")]
+#[command(name = "rivulet", version, about = "A terminal RSS reader")]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
