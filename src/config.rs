@@ -22,6 +22,8 @@ pub struct Config {
     pub recent_days: i64,
     #[serde(default = "default_layout")]
     pub layout: String,
+    #[serde(default = "default_theme")]
+    pub theme: String,
 }
 
 fn default_layout() -> String {
@@ -40,6 +42,10 @@ fn default_language() -> String {
     "en".to_string()
 }
 
+fn default_theme() -> String {
+    "dark".to_string()
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -47,6 +53,7 @@ impl Default for Config {
             refresh_minutes: default_refresh_minutes(),
             recent_days: default_recent_days(),
             layout: default_layout(),
+            theme: default_theme(),
         }
     }
 }
@@ -95,7 +102,9 @@ impl Config {
         } else {
             format!("{contents}{new_line}\n")
         };
-        let _ = std::fs::write(&path, new_contents);
+        if let Err(e) = std::fs::write(&path, new_contents) {
+            log::warn!("Failed to save layout to {}: {e}", path.display());
+        }
     }
 
     pub fn load() -> Self {

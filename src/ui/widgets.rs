@@ -9,24 +9,46 @@ use crate::ui::rich_text::{LinkRegion, rich_lines_to_ratatui};
 use crate::ui::theme::Theme;
 use crate::util::html::{extract_links, to_rich_lines};
 use crate::util::time::{format_timestamp, format_timestamp_relative};
+use unicode_width::UnicodeWidthStr;
 
-pub fn feeds_list<'a>(state: &AppState, theme: &Theme, max_width: u16, lang: &Lang) -> List<'a> {
+fn str_width(s: &str) -> usize {
+    UnicodeWidthStr::width(s)
+}
+
+pub fn feeds_list<'a>(
+    state: &AppState,
+    theme: &Theme,
+    area_width: u16,
+    lang: &'a Lang,
+) -> List<'a> {
+    let highlight_symbol = " ";
+    let max_width = (area_width as usize).saturating_sub(str_width(highlight_symbol));
     let items: Vec<ListItem> = state
         .feed_rows
         .iter()
         .filter_map(|row| match row {
             FeedRow::AllFeeds => {
-                let counter = format!("  {}", state.total_unread);
-                let available = max_width as usize;
-                let title_max = available.saturating_sub(counter.len()).saturating_sub(2);
-                let truncated = truncate_with_ellipsis(lang.all_feeds, title_max);
+                let counter = if state.total_unread > 0 {
+                    format!("{}", state.total_unread)
+                } else {
+                    String::new()
+                };
+                let available = max_width;
+                let prefix = "\u{2605} ";
+                let title_max = available
+                    .saturating_sub(str_width(prefix))
+                    .saturating_sub(str_width(&counter));
+                let truncated = truncate_with_ellipsis(&lang.all_feeds, title_max);
+                let used = str_width(prefix) + str_width(&truncated) + str_width(&counter);
+                let gap = available.saturating_sub(used);
                 let line = Line::from(vec![
                     Span::styled(
-                        format!("\u{2605} {truncated}"),
+                        format!("{prefix}{truncated}"),
                         Style::default()
                             .fg(theme.accent)
                             .add_modifier(Modifier::BOLD),
                     ),
+                    Span::raw(" ".repeat(gap)),
                     Span::styled(counter, theme.dim_style()),
                 ]);
                 Some(ListItem::new(line))
@@ -38,32 +60,51 @@ pub fn feeds_list<'a>(state: &AppState, theme: &Theme, max_width: u16, lang: &La
             } => {
                 let collapsed = state.collapsed_groups.contains(group_id);
                 let arrow = if collapsed { "\u{25b6}" } else { "\u{25bc}" };
-                let counter = format!("  {unread}");
-                let available = max_width as usize;
-                let title_max = available.saturating_sub(counter.len()).saturating_sub(3); // arrow + space
+                let counter = if *unread > 0 {
+                    format!("{unread}")
+                } else {
+                    String::new()
+                };
+                let available = max_width;
+                let prefix = format!("{arrow} ");
+                let title_max = available
+                    .saturating_sub(str_width(&prefix))
+                    .saturating_sub(str_width(&counter));
                 let truncated = truncate_with_ellipsis(name, title_max);
+                let used = str_width(&prefix) + str_width(&truncated) + str_width(&counter);
+                let gap = available.saturating_sub(used);
                 let line = Line::from(vec![
                     Span::styled(
-                        format!("{arrow} {truncated}"),
+                        format!("{prefix}{truncated}"),
                         Style::default()
                             .fg(theme.accent)
                             .add_modifier(Modifier::BOLD),
                     ),
+                    Span::raw(" ".repeat(gap)),
                     Span::styled(counter, theme.dim_style()),
                 ]);
                 Some(ListItem::new(line))
             }
             FeedRow::UngroupedHeader { unread } => {
-                let counter = format!("  {unread}");
-                let label = lang.uncategorized;
-                let available = max_width as usize;
-                let title_max = available.saturating_sub(counter.len()).saturating_sub(3);
-                let truncated = truncate_with_ellipsis(label, title_max);
+                let counter = if *unread > 0 {
+                    format!("{unread}")
+                } else {
+                    String::new()
+                };
+                let available = max_width;
+                let prefix = "\u{25bc} ";
+                let title_max = available
+                    .saturating_sub(str_width(prefix))
+                    .saturating_sub(str_width(&counter));
+                let truncated = truncate_with_ellipsis(&lang.uncategorized, title_max);
+                let used = str_width(prefix) + str_width(&truncated) + str_width(&counter);
+                let gap = available.saturating_sub(used);
                 let line = Line::from(vec![
                     Span::styled(
-                        format!("\u{25bc} {truncated}"),
+                        format!("{prefix}{truncated}"),
                         Style::default().fg(theme.dim).add_modifier(Modifier::BOLD),
                     ),
+                    Span::raw(" ".repeat(gap)),
                     Span::styled(counter, theme.dim_style()),
                 ]);
                 Some(ListItem::new(line))
@@ -76,22 +117,28 @@ pub fn feeds_list<'a>(state: &AppState, theme: &Theme, max_width: u16, lang: &La
                     .filter(|value| !value.is_empty())
                     .unwrap_or(feed.url.as_str());
                 let base_style = if unread > 0 {
-                    Style::default().add_modifier(Modifier::BOLD)
+                    Style::default().fg(theme.text).add_modifier(Modifier::BOLD)
                 } else {
-                    Style::default()
+                    Style::default().fg(theme.text)
                 };
-                let counter = format!("  {unread}");
+                let counter = if unread > 0 {
+                    format!("{unread}")
+                } else {
+                    String::new()
+                };
                 let has_groups = !state.groups.is_empty();
                 let indent = if has_groups { "  " } else { "" };
-                let available = max_width as usize;
+                let available = max_width;
                 let title_max = available
-                    .saturating_sub(counter.len())
-                    .saturating_sub(indent.len())
-                    .saturating_sub(1);
+                    .saturating_sub(str_width(&counter))
+                    .saturating_sub(str_width(indent));
                 let truncated = truncate_with_ellipsis(title, title_max);
+                let used = str_width(indent) + str_width(&truncated) + str_width(&counter);
+                let gap = available.saturating_sub(used);
                 let line = Line::from(vec![
                     Span::raw(indent.to_string()),
                     Span::styled(truncated, base_style),
+                    Span::raw(" ".repeat(gap)),
                     Span::styled(counter, theme.dim_style()),
                 ]);
                 Some(ListItem::new(line))
@@ -101,7 +148,7 @@ pub fn feeds_list<'a>(state: &AppState, theme: &Theme, max_width: u16, lang: &La
 
     List::new(items)
         .highlight_style(theme.highlight_style())
-        .highlight_symbol(" ")
+        .highlight_symbol(highlight_symbol)
 }
 
 pub fn entries_list<'a>(
@@ -110,7 +157,7 @@ pub fn entries_list<'a>(
     show_feed: bool,
     theme: &Theme,
     max_width: u16,
-    lang: &Lang,
+    lang: &'a Lang,
 ) -> List<'a> {
     // Pre-compute feed name column width when showing feeds
     let feed_col_width = if show_feed {
@@ -138,7 +185,7 @@ pub fn entries_list<'a>(
                 .title
                 .as_deref()
                 .filter(|value| !value.is_empty())
-                .unwrap_or(lang.no_title);
+                .unwrap_or(lang.no_title.as_str());
             let unread = entry.read_at.is_none();
             let saved = entry.saved_at.is_some();
             let date = entry
@@ -147,15 +194,19 @@ pub fn entries_list<'a>(
                 .map(|ts| format_timestamp_relative(ts, lang))
                 .unwrap_or_default();
             let title_style = if unread {
-                Style::default().add_modifier(Modifier::BOLD)
+                Style::default().fg(theme.text).add_modifier(Modifier::BOLD)
             } else {
-                Style::default()
+                Style::default().fg(theme.text)
             };
             let mut title_style = title_style;
             if saved {
                 title_style = title_style.fg(theme.status_ok);
             }
-            let prefix = if saved { lang.saved_marker } else { "" };
+            let prefix = if saved {
+                lang.saved_marker.as_str()
+            } else {
+                ""
+            };
             let available = (max_width as usize).saturating_sub(1);
             let date_len = date.len();
 
@@ -177,7 +228,7 @@ pub fn entries_list<'a>(
 
             if saved {
                 spans.push(Span::styled(
-                    lang.saved_marker,
+                    lang.saved_marker.as_str(),
                     Style::default().fg(theme.status_ok),
                 ));
             }
@@ -218,7 +269,7 @@ pub fn preview_parts<'a>(
     entry: Option<&'a Entry>,
     theme: &'a Theme,
     width: u16,
-    lang: &Lang,
+    lang: &'a Lang,
     selected_link_url: Option<&str>,
 ) -> PreviewParts<'a> {
     if let Some(entry) = entry {
@@ -228,7 +279,7 @@ pub fn preview_parts<'a>(
             .unwrap_or_else(|| lang.no_title.to_string());
         let title_line = Line::from(Span::styled(
             title,
-            Style::default().add_modifier(Modifier::BOLD),
+            Style::default().fg(theme.text).add_modifier(Modifier::BOLD),
         ));
 
         let date = entry
@@ -266,7 +317,7 @@ pub fn preview_parts<'a>(
         }
     } else {
         PreviewParts {
-            title: Line::from(lang.no_entry_selected),
+            title: Line::from(lang.no_entry_selected.as_str()),
             meta: Line::from(""),
             body_lines: vec![Line::from("")],
             body_len: 1,
@@ -306,7 +357,7 @@ pub fn status_bar<'a>(
     state: &'a AppState,
     theme: &Theme,
     recent_days: i64,
-    lang: &Lang,
+    lang: &'a Lang,
     width: u16,
 ) -> Paragraph<'a> {
     // Left spans: app name + version | feed | filter | search
@@ -319,7 +370,7 @@ pub fn status_bar<'a>(
                 .filter(|value| !value.is_empty())
                 .or(Some(feed.url.as_str()))
         })
-        .unwrap_or(lang.no_feed_selected);
+        .unwrap_or(lang.no_feed_selected.as_str());
     let mut filters: Vec<String> = Vec::new();
     if state.unread_only {
         filters.push(lang.filter_unread.to_string());
@@ -337,23 +388,23 @@ pub fn status_bar<'a>(
     };
     let mut left_spans = vec![
         Span::styled(
-            format!("{} v{}", lang.app_name, version),
+            format!(" {} v{}", lang.app_name, version),
             Style::default()
                 .fg(theme.accent)
                 .add_modifier(Modifier::BOLD),
         ),
         Span::styled("  |  ", theme.dim_style()),
-        Span::styled(lang.feed_label, theme.dim_style()),
+        Span::styled(lang.feed_label.as_str(), theme.dim_style()),
         Span::styled(feed_title, Style::default().fg(theme.text)),
         Span::styled("  |  ", theme.dim_style()),
-        Span::styled(lang.filter_label, theme.dim_style()),
+        Span::styled(lang.filter_label.as_str(), theme.dim_style()),
         Span::styled(filter, Style::default().fg(theme.accent_alt)),
     ];
     if let Some(query) = state.search_query.as_deref()
         && !query.is_empty()
     {
         left_spans.push(Span::styled("  |  ", theme.dim_style()));
-        left_spans.push(Span::styled(lang.search_label, theme.dim_style()));
+        left_spans.push(Span::styled(lang.search_label.as_str(), theme.dim_style()));
         left_spans.push(Span::styled(query, Style::default().fg(theme.accent)));
     }
 
@@ -385,7 +436,10 @@ pub fn status_bar<'a>(
     }
 
     right_spans.push(Span::raw("  |  "));
-    right_spans.push(Span::styled(lang.status_bar_hint, theme.dim_style()));
+    right_spans.push(Span::styled(
+        lang.status_bar_hint.as_str(),
+        theme.dim_style(),
+    ));
 
     let left_width: usize = left_spans.iter().map(|s| s.width()).sum();
     let right_width: usize = right_spans.iter().map(|s| s.width()).sum();
@@ -418,8 +472,8 @@ pub fn status_bar_height(state: &AppState, recent_days: i64, lang: &Lang, width:
                 .filter(|value| !value.is_empty())
                 .or(Some(feed.url.as_str()))
         })
-        .unwrap_or(lang.no_feed_selected);
-    let mut left_w = format!("{} v{}", lang.app_name, version).len()
+        .unwrap_or(lang.no_feed_selected.as_str());
+    let mut left_w = format!(" {} v{}", lang.app_name, version).len()
         + "  |  ".len()
         + lang.feed_label.len()
         + feed_title.len()
@@ -490,7 +544,7 @@ pub fn assign_group_modal_text(
         let style = if i == selection {
             theme.highlight_style()
         } else {
-            Style::default()
+            Style::default().fg(theme.text)
         };
         lines.push(Line::from(vec![
             Span::styled(marker.to_string(), style),
@@ -559,7 +613,7 @@ pub fn manage_groups_modal_text(
             let style = if i == selection {
                 theme.highlight_style()
             } else {
-                Style::default()
+                Style::default().fg(theme.text)
             };
             let pos = format!("{}. ", i + 1);
             lines.push(Line::from(vec![
@@ -582,17 +636,75 @@ pub fn selected_entry(entries: &[Entry], selected: Option<i64>) -> Option<&Entry
 }
 
 fn truncate_with_ellipsis(s: &str, max: usize) -> String {
+    use unicode_width::UnicodeWidthChar;
     if max == 0 {
         return String::new();
     }
-    let chars: Vec<char> = s.chars().collect();
-    if chars.len() <= max {
-        s.to_string()
-    } else if max <= 1 {
-        "\u{2026}".to_string()
-    } else {
-        let mut result: String = chars[..max - 1].iter().collect();
-        result.push('\u{2026}');
-        result
+    if str_width(s) <= max {
+        return s.to_string();
+    }
+    if max <= 1 {
+        return "\u{2026}".to_string();
+    }
+    let mut result = String::new();
+    let mut width = 0;
+    for ch in s.chars() {
+        let cw = UnicodeWidthChar::width(ch).unwrap_or(0);
+        if width + cw + 1 > max {
+            break;
+        }
+        result.push(ch);
+        width += cw;
+    }
+    result.push('\u{2026}');
+    result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn truncate_ascii_within_limit() {
+        assert_eq!(truncate_with_ellipsis("hello", 10), "hello");
+    }
+
+    #[test]
+    fn truncate_ascii_exact_limit() {
+        assert_eq!(truncate_with_ellipsis("hello", 5), "hello");
+    }
+
+    #[test]
+    fn truncate_ascii_over_limit() {
+        let result = truncate_with_ellipsis("hello world", 6);
+        assert_eq!(str_width(&result), 6);
+        assert!(result.ends_with('\u{2026}'));
+    }
+
+    #[test]
+    fn truncate_empty_max() {
+        assert_eq!(truncate_with_ellipsis("hello", 0), "");
+    }
+
+    #[test]
+    fn truncate_max_one() {
+        assert_eq!(truncate_with_ellipsis("hello", 1), "\u{2026}");
+    }
+
+    #[test]
+    fn truncate_unicode_width() {
+        // Star (★) is 1 column wide, but 3 bytes
+        let s = "★ Feed Name";
+        let result = truncate_with_ellipsis(s, 8);
+        assert!(str_width(&result) <= 8);
+        assert!(result.ends_with('\u{2026}'));
+    }
+
+    #[test]
+    fn str_width_unicode() {
+        // ★ = 1 column, ▶ = 1 column
+        assert_eq!(str_width("\u{2605} "), 2);
+        assert_eq!(str_width("\u{25b6} "), 2);
+        assert_eq!(str_width("abc"), 3);
     }
 }

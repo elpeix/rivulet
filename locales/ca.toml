@@ -1,0 +1,132 @@
+# Catalan locale for Rivulet
+
+[panels]
+feeds = "FONTS"
+entries = "ENTRADES"
+preview = "PREVISUALITZACIÓ"
+
+[placeholders]
+no_title = "(sense títol)"
+no_entry_selected = "Cap entrada seleccionada"
+no_feed_selected = "Cap font seleccionada"
+all_feeds = "Tot"
+uncategorized = "Sense categoria"
+no_categories = "(sense categories)"
+saved_marker = "◆ "
+
+[status]
+unread_label = "No llegits"
+refreshing = "Actualitzant..."
+already_refreshing = "Ja s'està actualitzant..."
+no_feeds_to_refresh = "No hi ha fonts per actualitzar"
+opened_in_browser = "Obert al navegador"
+entry_has_no_url = "L'entrada no té URL"
+refresh_thread_crashed = "L'actualització ha fallat inesperadament"
+
+[prompts]
+search_prompt = "Cerca: "
+add_feed_prompt = "URL del feed: "
+new_group_name = "Nom de la categoria: "
+rename_prompt = "Reanomena: "
+delete_feed_confirm = "Elimina font? (s/N) "
+delete_group_confirm = "Elimina categoria? (s/N)"
+
+[modals]
+search_title = "Cerca"
+add_feed_title = "Afegeix font"
+rename_feed_title = "Reanomena font"
+rename_feed_hint = "Deixa en blanc per restaurar el nom original"
+delete_feed_title = "Elimina font"
+new_category = "Nova categoria"
+rename_category = "Reanomena categoria"
+category_title = " Assigna categoria "
+categories_title = " Gestiona categories "
+help_title = " AJUDA "
+
+[labels]
+name_label = "Nom:"
+query_label = "Consulta"
+url_label = "URL"
+select_category = "Selecciona categoria:"
+no_category = "Sense categoria"
+new_category_option = "Nova categoria..."
+filter_all = "Tot"
+filter_unread = "No llegits"
+filter_saved = "Desats"
+filter_all_time = "Tot el temps"
+
+[instructions]
+enter_confirm_esc_cancel = "Enter per confirmar, Esc per cancel·lar"
+y_confirm_n_cancel = "s = confirma, n/Esc = cancel·la"
+group_manage_hint = "a afegeix  d elimina  r reanomena  J/K ordena  Esc tanca"
+assign_group_prompt = "Assigna grup..."
+updated_entries = "Entrades actualitzades"
+status_bar_hint = "? ajuda  q surt"
+
+[help_sections]
+help_navigation = "Navegació"
+help_feeds = "Fonts"
+help_entries = "Entrades"
+help_general = "General"
+
+[help_items]
+help_next_link = "Següent enllaç"
+help_prev_link = "Anterior enllaç"
+help_move_panel = "Panell anterior/següent"
+help_move_selection = "Mou selecció"
+help_scroll_preview = "Pàgina amunt/avall"
+help_top_bottom = "Inici / final"
+help_resize_panel = "Redimensiona panell"
+help_toggle_layout = "Canvia disposició"
+help_select_open = "Selecciona / obre"
+help_collapse_category = "Plega categoria"
+help_jump_panel = "Salta a panell"
+help_back = "Enrere"
+help_add_feed = "Afegeix font"
+help_rename_feed = "Reanomena font"
+help_delete_feed = "Elimina font"
+help_refresh_all = "Actualitza tot"
+help_toggle_unread = "Filtre no llegits"
+help_toggle_saved = "Filtre desats"
+help_assign_category = "Assigna categoria"
+help_manage_categories = "Gestiona categories (J/K ordena)"
+help_toggle_read = "Marca llegit/no llegit"
+help_mark_all_read = "Marca tot com a llegit"
+help_mark_feed_read = "Marca font com a llegida"
+help_save_later = "Desa per més tard"
+help_open_browser = "Obre al navegador"
+help_search = "Cerca"
+help_cycle_sort = "Canvia ordenació"
+help_toggle_time = "Filtre temporal"
+help_toggle_help = "Mostra ajuda"
+help_quit = "Surt"
+
+[time]
+now = "ara"
+minutes_ago = "{n} min"
+hours_ago = "{n} h"
+days_ago = "{n} d"
+
+[sort]
+sort_label = "Ordenació"
+sort_date_desc = "Més recents"
+sort_date_asc = "Més antics"
+sort_title_asc = "Títol A-Z"
+
+[header]
+app_name = "Rivulet"
+feed_label = "Font: "
+filter_label = "Filtre: "
+search_label = "Cerca: "
+
+[discovery]
+discovering = "Descobrint feed..."
+select_feed_title = "Selecciona feed"
+select_feed_prompt = "S'han trobat múltiples feeds. Selecciona'n un:"
+
+[templates]
+feed_saved = "Font desada: {url}"
+invalid_url = "URL no vàlida: {url}"
+refreshed_summary = "Actualitzades {feeds} fonts ({entries} entrades, {errors} errors)"
+filter_recent_days = "Últims {days} dies"
+no_feed_found = "No s'ha trobat cap feed a: {url}"

@@ -107,7 +107,7 @@ fn draw_feeds_panel(
     frame.render_widget(
         Paragraph::new(Line::from(vec![
             Span::raw(" "),
-            Span::styled(lang.feeds, theme.section_title_style(focused)),
+            Span::styled(lang.feeds.as_str(), theme.section_title_style(focused)),
         ])),
         split[0],
     );
@@ -139,9 +139,9 @@ fn draw_entries_panel(
         .split(inner);
 
     let sort_label = match state.sort_mode {
-        crate::app::state::SortMode::DateDesc => lang.sort_date_desc,
-        crate::app::state::SortMode::DateAsc => lang.sort_date_asc,
-        crate::app::state::SortMode::TitleAsc => lang.sort_title_asc,
+        crate::app::state::SortMode::DateDesc => lang.sort_date_desc.as_str(),
+        crate::app::state::SortMode::DateAsc => lang.sort_date_asc.as_str(),
+        crate::app::state::SortMode::TitleAsc => lang.sort_title_asc.as_str(),
     };
     let title_style = theme.section_title_style(focused);
     let available = split[0].width.saturating_sub(1) as usize;
@@ -151,7 +151,7 @@ fn draw_entries_panel(
     frame.render_widget(
         Paragraph::new(Line::from(vec![
             Span::raw(" "),
-            Span::styled(lang.entries, title_style),
+            Span::styled(lang.entries.as_str(), title_style),
             Span::raw(" ".repeat(padding)),
             Span::styled(sort_label, theme.dim_style()),
         ])),
@@ -304,7 +304,7 @@ fn draw_modal(
                 lines.push(Line::from(Span::styled(hint, theme.dim_style())));
                 lines.push(Line::from(""));
             }
-            lines.push(Line::from(lang.enter_confirm_esc_cancel));
+            lines.push(Line::from(lang.enter_confirm_esc_cancel.as_str()));
             let text = Text::from(lines);
             frame.render_widget(modal(&title, text, theme), area);
         }
@@ -312,26 +312,26 @@ fn draw_modal(
             let text = Text::from(vec![
                 Line::from(prompt),
                 Line::from(""),
-                Line::from(lang.y_confirm_n_cancel),
+                Line::from(lang.y_confirm_n_cancel.as_str()),
             ]);
             frame.render_widget(modal(&title, text, theme), area);
         }
         Modal::AssignGroup { selection } => {
             let text = assign_group_modal_text(&state.groups, selection, theme, lang);
-            frame.render_widget(modal(lang.category_title, text, theme), area);
+            frame.render_widget(modal(&lang.category_title, text, theme), area);
         }
         Modal::ManageGroups { selection } => {
             let text = manage_groups_modal_text(&state.groups, selection, theme, lang);
-            frame.render_widget(modal(lang.categories_title, text, theme), area);
+            frame.render_widget(modal(&lang.categories_title, text, theme), area);
         }
         Modal::GroupInput { title, value } => {
             let cursor = Span::styled("_", theme.highlight_style());
             let input_line = Line::from(vec![Span::raw(value), cursor]);
             let text = Text::from(vec![
-                Line::from(lang.name_label),
+                Line::from(lang.name_label.as_str()),
                 input_line,
                 Line::from(""),
-                Line::from(lang.enter_confirm_esc_cancel),
+                Line::from(lang.enter_confirm_esc_cancel.as_str()),
             ]);
             frame.render_widget(modal(&title, text, theme), area);
         }
@@ -348,10 +348,10 @@ fn draw_modal(
                         format!("{frame_char} "),
                         Style::default().fg(theme.accent_alt),
                     ),
-                    Span::raw(lang.discovering),
+                    Span::raw(lang.discovering.as_str()),
                 ]),
             ]);
-            frame.render_widget(modal(lang.add_feed_title, text, theme), area);
+            frame.render_widget(modal(&lang.add_feed_title, text, theme), area);
         }
         Modal::SelectDiscoveredFeed { feeds, selection } => {
             let mut lines = vec![
@@ -380,9 +380,9 @@ fn draw_modal(
                 ]));
             }
             lines.push(Line::from(""));
-            lines.push(Line::from(lang.enter_confirm_esc_cancel));
+            lines.push(Line::from(lang.enter_confirm_esc_cancel.as_str()));
             let text = Text::from(lines);
-            frame.render_widget(modal(lang.select_feed_title, text, theme), area);
+            frame.render_widget(modal(&lang.select_feed_title, text, theme), area);
         }
     }
 }
@@ -423,58 +423,58 @@ fn draw_help_modal(frame: &mut Frame<'_>, theme: &Theme, area: Rect, scroll: u16
     };
     let text = Text::from(vec![
         Line::from(""),
-        heading(lang.help_navigation),
+        heading(&lang.help_navigation),
         separator.clone(),
         row(
             "Left/Right",
-            lang.help_move_panel,
+            &lang.help_move_panel,
             "Up/Down",
-            lang.help_move_selection,
+            &lang.help_move_selection,
         ),
         row(
             "PgUp/PgDn",
-            lang.help_scroll_preview,
+            &lang.help_scroll_preview,
             "Home/End",
-            lang.help_top_bottom,
+            &lang.help_top_bottom,
         ),
         row(
             "H / L",
-            lang.help_resize_panel,
+            &lang.help_resize_panel,
             "Enter",
-            lang.help_select_open,
+            &lang.help_select_open,
         ),
         row(
             "Space",
-            lang.help_collapse_category,
+            &lang.help_collapse_category,
             "w",
-            lang.help_toggle_layout,
+            &lang.help_toggle_layout,
         ),
-        row("1 / 2 / 3", lang.help_jump_panel, "Esc", lang.help_back),
+        row("1 / 2 / 3", &lang.help_jump_panel, "Esc", &lang.help_back),
         Line::from(""),
-        heading(lang.help_feeds),
+        heading(&lang.help_feeds),
         separator.clone(),
-        row("a", lang.help_add_feed, "e", lang.help_rename_feed),
-        row("d", lang.help_delete_feed, "r", lang.help_refresh_all),
-        row("f", lang.help_toggle_unread, "g", lang.help_toggle_saved),
+        row("a", &lang.help_add_feed, "e", &lang.help_rename_feed),
+        row("d", &lang.help_delete_feed, "r", &lang.help_refresh_all),
+        row("f", &lang.help_toggle_unread, "g", &lang.help_toggle_saved),
         row(
             "c",
-            lang.help_assign_category,
+            &lang.help_assign_category,
             "C",
-            lang.help_manage_categories,
+            &lang.help_manage_categories,
         ),
-        row("R", lang.help_mark_feed_read, "S", lang.help_cycle_sort),
-        row("t", lang.help_toggle_time, "", ""),
+        row("R", &lang.help_mark_feed_read, "S", &lang.help_cycle_sort),
+        row("t", &lang.help_toggle_time, "", ""),
         Line::from(""),
-        heading(lang.help_entries),
+        heading(&lang.help_entries),
         separator.clone(),
-        row("m", lang.help_toggle_read, "M", lang.help_mark_all_read),
-        row("s", lang.help_save_later, "/", lang.help_search),
-        row("o", lang.help_open_browser, "Tab", lang.help_next_link),
-        row("Shift-Tab", lang.help_prev_link, "", ""),
+        row("m", &lang.help_toggle_read, "M", &lang.help_mark_all_read),
+        row("s", &lang.help_save_later, "/", &lang.help_search),
+        row("o", &lang.help_open_browser, "Tab", &lang.help_next_link),
+        row("Shift-Tab", &lang.help_prev_link, "", ""),
         Line::from(""),
-        heading(lang.help_general),
+        heading(&lang.help_general),
         separator,
-        row("?", lang.help_toggle_help, "q", lang.help_quit),
+        row("?", &lang.help_toggle_help, "q", &lang.help_quit),
     ]);
     let content_height = text.lines.len();
     let inner_height = area.height.saturating_sub(2) as usize;

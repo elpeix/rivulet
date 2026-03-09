@@ -1,0 +1,133 @@
+# English locale for Rivulet
+# This is the reference locale. All other locales must define the same keys.
+
+[panels]
+feeds = "FEEDS"
+entries = "ENTRIES"
+preview = "PREVIEW"
+
+[placeholders]
+no_title = "(no title)"
+no_entry_selected = "No entry selected"
+no_feed_selected = "No feed selected"
+all_feeds = "All"
+uncategorized = "Uncategorized"
+no_categories = "(no categories)"
+saved_marker = "◆ "
+
+[status]
+unread_label = "Unread"
+refreshing = "Refreshing..."
+already_refreshing = "Already refreshing..."
+no_feeds_to_refresh = "No feeds to refresh"
+opened_in_browser = "Opened in browser"
+entry_has_no_url = "Entry has no URL"
+refresh_thread_crashed = "Refresh failed unexpectedly"
+
+[prompts]
+search_prompt = "Search: "
+add_feed_prompt = "Add feed URL: "
+new_group_name = "New category name: "
+rename_prompt = "Rename: "
+delete_feed_confirm = "Delete feed? (y/N) "
+delete_group_confirm = "Delete category? (y/N)"
+
+[modals]
+search_title = "Search"
+add_feed_title = "Add feed"
+rename_feed_title = "Rename feed"
+rename_feed_hint = "Leave empty to restore original name"
+delete_feed_title = "Delete feed"
+new_category = "New category"
+rename_category = "Rename category"
+category_title = " Assign category "
+categories_title = " Manage categories "
+help_title = " HELP "
+
+[labels]
+name_label = "Name:"
+query_label = "Query"
+url_label = "URL"
+select_category = "Select category:"
+no_category = "No category"
+new_category_option = "New category..."
+filter_all = "All"
+filter_unread = "Unread"
+filter_saved = "Saved"
+filter_all_time = "All time"
+
+[instructions]
+enter_confirm_esc_cancel = "Enter to confirm, Esc to cancel"
+y_confirm_n_cancel = "y = confirm, n/Esc = cancel"
+group_manage_hint = "a add  d delete  r rename  J/K reorder  Esc close"
+assign_group_prompt = "Assign group..."
+updated_entries = "Updated entries"
+status_bar_hint = "? help  q quit"
+
+[help_sections]
+help_navigation = "Navigation"
+help_feeds = "Feeds"
+help_entries = "Entries"
+help_general = "General"
+
+[help_items]
+help_next_link = "Next link"
+help_prev_link = "Previous link"
+help_move_panel = "Previous/next panel"
+help_move_selection = "Move selection"
+help_scroll_preview = "Page up/down"
+help_top_bottom = "Top / bottom"
+help_resize_panel = "Resize panel"
+help_toggle_layout = "Toggle layout"
+help_select_open = "Select / open"
+help_collapse_category = "Collapse category"
+help_jump_panel = "Jump to panel"
+help_back = "Back"
+help_add_feed = "Add feed"
+help_rename_feed = "Rename feed"
+help_delete_feed = "Delete feed"
+help_refresh_all = "Refresh all"
+help_toggle_unread = "Toggle unread"
+help_toggle_saved = "Toggle saved"
+help_assign_category = "Assign category"
+help_manage_categories = "Manage categories (J/K reorder)"
+help_toggle_read = "Toggle read"
+help_mark_all_read = "Mark all read"
+help_mark_feed_read = "Mark feed read"
+help_save_later = "Save for later"
+help_open_browser = "Open in browser"
+help_search = "Search"
+help_cycle_sort = "Cycle sort"
+help_toggle_time = "Toggle time filter"
+help_toggle_help = "Toggle help"
+help_quit = "Quit"
+
+[time]
+now = "now"
+minutes_ago = "{n}min"
+hours_ago = "{n}h"
+days_ago = "{n}d"
+
+[sort]
+sort_label = "Sort"
+sort_date_desc = "Newest first"
+sort_date_asc = "Oldest first"
+sort_title_asc = "Title A-Z"
+
+[header]
+app_name = "Rivulet"
+feed_label = "Feed: "
+filter_label = "Filter: "
+search_label = "Search: "
+
+[discovery]
+discovering = "Discovering feed..."
+select_feed_title = "Select Feed"
+select_feed_prompt = "Multiple feeds found. Select one:"
+
+[templates]
+feed_saved = "Feed saved: {url}"
+invalid_url = "Invalid URL: {url}"
+refreshed_summary = "Refreshed {feeds} feeds ({entries} entries, {errors} errors)"
+filter_recent_days = "Last {days} days"
+no_feed_found = "No feed found at: {url}"

@@ -87,7 +87,7 @@ fn annotations_to_style(
     theme: &Theme,
     selected_link_url: Option<&str>,
 ) -> Style {
-    let mut style = Style::default();
+    let mut style = Style::default().fg(theme.text);
 
     for ann in annotations {
         match ann {
