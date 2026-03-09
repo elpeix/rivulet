@@ -11,8 +11,8 @@ conflicts=('rivulet')
 
 source_x86_64=("${url}/releases/download/v${pkgver}/rivulet-v${pkgver}-x86_64-unknown-linux-gnu.tar.gz")
 source_aarch64=("${url}/releases/download/v${pkgver}/rivulet-v${pkgver}-aarch64-unknown-linux-gnu.tar.gz")
-sha256sums_x86_64=('PLACEHOLDER')
-sha256sums_aarch64=('PLACEHOLDER')
+sha256sums_x86_64=('0e746ae3f275084fece4d03b66c6596192e69ca44ea69bb40333d1a2c8790a95')
+sha256sums_aarch64=('6ed0a15ea5e6c95c7254bbd613199d1d57ed53707130b6fa98be5fd54c0071e6')
 
 package() {
     local _target="${CARCH}-unknown-linux-gnu"
