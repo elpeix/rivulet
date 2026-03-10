@@ -25,6 +25,7 @@ pub enum InputMode {
     DeleteGroup {
         group_id: i64,
     },
+    FeedInfo,
     Discovering,
     SelectDiscoveredFeed {
         feeds: Vec<DiscoveredFeed>,
@@ -124,8 +125,10 @@ pub struct AppState {
     pub preview_link_regions: Vec<LinkRegion>,
     pub preview_body_area: Rect,
     pub sort_mode: SortMode,
+    pub hide_read_feeds: bool,
     pub input_mode: InputMode,
     pub input_buffer: String,
+    pub selected_entries: HashSet<i64>,
     pub show_help: bool,
     pub help_scroll: u16,
     pub modal_selection: usize,
@@ -181,8 +184,10 @@ impl Default for AppState {
             preview_link_regions: Vec::new(),
             preview_body_area: Rect::default(),
             sort_mode: SortMode::DateDesc,
+            hide_read_feeds: false,
             input_mode: InputMode::None,
             input_buffer: String::new(),
+            selected_entries: HashSet::new(),
             show_help: false,
             help_scroll: 0,
             modal_selection: 0,
@@ -212,6 +217,7 @@ impl AppState {
             }
             Action::EntriesLoaded(entries) => {
                 self.entries = entries;
+                self.selected_entries.clear();
                 self.rebuild_entry_index();
                 if self.entries.is_empty() {
                     self.selected_entry = None;
@@ -294,8 +300,19 @@ impl AppState {
                 }
             }
             Action::UpdateUnreadCounts(counts) => {
-                self.unread_counts = counts.into_iter().collect();
-                self.feed_rows_dirty = true;
+                let old_counts =
+                    std::mem::replace(&mut self.unread_counts, counts.into_iter().collect());
+                if self.hide_read_feeds
+                    && self.feeds.iter().any(|f| {
+                        let was_zero = old_counts.get(&f.id).copied().unwrap_or(0) == 0;
+                        let is_zero = self.unread_counts.get(&f.id).copied().unwrap_or(0) == 0;
+                        was_zero != is_zero
+                    })
+                {
+                    self.feed_rows_dirty = true;
+                } else {
+                    self.update_feed_row_counts();
+                }
             }
             Action::UpdateTotalUnread(total) => {
                 self.total_unread = total;
@@ -353,9 +370,12 @@ impl AppState {
             | Action::MarkRead(_)
             | Action::MarkUnread(_)
             | Action::MarkAllRead(_)
+            | Action::MarkAllUnread(_)
             | Action::MarkFeedRead(_)
             | Action::MarkSaved(_)
             | Action::MarkUnsaved(_)
+            | Action::MarkAllSaved(_)
+            | Action::MarkAllUnsaved(_)
             | Action::LoadGroups
             | Action::AddGroup { .. }
             | Action::DeleteGroup(_)
@@ -404,28 +424,116 @@ impl AppState {
         }
     }
 
-    pub fn flush_feed_rows(&mut self) {
-        if self.feed_rows_dirty {
-            self.feed_rows_dirty = false;
-            self.rebuild_feed_rows();
-            if self.selected_feed_row_index.is_none() && !self.feed_rows.is_empty() {
-                self.selected_feed_row_index = Some(0);
+    /// Update unread counters in existing feed rows without changing structure.
+    /// Feeds that became empty stay visible until an explicit rebuild.
+    fn update_feed_row_counts(&mut self) {
+        let mut feeds_by_group: HashMap<Option<i64>, Vec<usize>> = HashMap::new();
+        for (i, feed) in self.feeds.iter().enumerate() {
+            feeds_by_group.entry(feed.group_id).or_default().push(i);
+        }
+        for row in &mut self.feed_rows {
+            match row {
+                FeedRow::GroupHeader {
+                    group_id, unread, ..
+                } => {
+                    *unread = feeds_by_group.get(&Some(*group_id)).map_or(0, |indices| {
+                        indices
+                            .iter()
+                            .map(|&i| {
+                                self.feeds
+                                    .get(i)
+                                    .and_then(|f| self.unread_counts.get(&f.id).copied())
+                                    .unwrap_or(0)
+                            })
+                            .sum()
+                    });
+                }
+                FeedRow::UngroupedHeader { unread } => {
+                    *unread = feeds_by_group.get(&None).map_or(0, |indices| {
+                        indices
+                            .iter()
+                            .map(|&i| {
+                                self.feeds
+                                    .get(i)
+                                    .and_then(|f| self.unread_counts.get(&f.id).copied())
+                                    .unwrap_or(0)
+                            })
+                            .sum()
+                    });
+                }
+                FeedRow::AllFeeds | FeedRow::FeedItem { .. } => {}
             }
         }
     }
 
+    /// Rebuild feed rows if dirty. Returns `true` when the selected feed changed
+    /// (e.g. because the previous one was hidden), so the caller can reload entries.
+    pub fn flush_feed_rows(&mut self) -> bool {
+        if !self.feed_rows_dirty {
+            return false;
+        }
+        self.feed_rows_dirty = false;
+        let prev_feed = self.selected_feed;
+        self.rebuild_feed_rows();
+        if self.selected_feed_row_index.is_none() && !self.feed_rows.is_empty() {
+            self.selected_feed_row_index = Some(0);
+        }
+        // Sync selected_feed to whatever feed_row is now selected
+        self.sync_selected_feed_from_row();
+        self.selected_feed != prev_feed
+    }
+
+    /// Update selected_feed / selected_feed_index to match current feed row.
+    fn sync_selected_feed_from_row(&mut self) {
+        if let Some(row_idx) = self.selected_feed_row_index {
+            if let Some(FeedRow::FeedItem { feed_index }) = self.feed_rows.get(row_idx) {
+                if let Some(feed) = self.feeds.get(*feed_index) {
+                    self.selected_feed = Some(feed.id);
+                    self.selected_feed_index = Some(*feed_index);
+                    return;
+                }
+            }
+        }
+        self.selected_feed = None;
+        self.selected_feed_index = None;
+    }
+
     pub fn rebuild_feed_rows(&mut self) {
+        let prev_row_index = self.selected_feed_row_index;
         self.feed_rows.clear();
         // "All" row always first
         self.feed_rows.push(FeedRow::AllFeeds);
 
+        // Helper: should this feed be hidden?
+        let hiding = self.hide_read_feeds;
+        let feed_visible =
+            |feed_index: usize, feeds: &[Feed], counts: &HashMap<i64, i64>| -> bool {
+                if !hiding {
+                    return true;
+                }
+                let unread = feeds
+                    .get(feed_index)
+                    .and_then(|f| counts.get(&f.id).copied())
+                    .unwrap_or(0);
+                unread > 0
+            };
+
         if self.groups.is_empty() {
             // No groups: flat list
             for (i, _feed) in self.feeds.iter().enumerate() {
-                self.feed_rows.push(FeedRow::FeedItem { feed_index: i });
+                if feed_visible(i, &self.feeds, &self.unread_counts) {
+                    self.feed_rows.push(FeedRow::FeedItem { feed_index: i });
+                }
             }
             // Sync selected_feed_row_index (+1 offset for AllFeeds)
-            self.selected_feed_row_index = self.selected_feed_index.map(|i| i + 1);
+            if let Some(fi) = self.selected_feed_index {
+                let found = self.feed_rows.iter().position(
+                    |row| matches!(row, FeedRow::FeedItem { feed_index } if *feed_index == fi),
+                );
+                self.selected_feed_row_index = found
+                    .or(prev_row_index)
+                    .map(|i| i.min(self.feed_rows.len().saturating_sub(1)));
+            }
             return;
         }
 
@@ -449,6 +557,10 @@ impl AppState {
                     })
                     .sum()
             });
+            // Hide empty groups when hiding empty feeds
+            if hiding && unread == 0 {
+                continue;
+            }
             self.feed_rows.push(FeedRow::GroupHeader {
                 group_id: group.id,
                 name: group.name.clone(),
@@ -457,7 +569,9 @@ impl AppState {
             if !self.collapsed_groups.contains(&group.id) {
                 if let Some(indices) = group_feeds {
                     for &fi in indices {
-                        self.feed_rows.push(FeedRow::FeedItem { feed_index: fi });
+                        if feed_visible(fi, &self.feeds, &self.unread_counts) {
+                            self.feed_rows.push(FeedRow::FeedItem { feed_index: fi });
+                        }
                     }
                 }
             }
@@ -474,21 +588,28 @@ impl AppState {
                         .unwrap_or(0)
                 })
                 .sum();
-            self.feed_rows.push(FeedRow::UngroupedHeader { unread });
-            for &fi in ungrouped {
-                self.feed_rows.push(FeedRow::FeedItem { feed_index: fi });
+            if !hiding || unread > 0 {
+                self.feed_rows.push(FeedRow::UngroupedHeader { unread });
+                for &fi in ungrouped {
+                    if feed_visible(fi, &self.feeds, &self.unread_counts) {
+                        self.feed_rows.push(FeedRow::FeedItem { feed_index: fi });
+                    }
+                }
             }
         }
 
         // Update selected_feed_row_index to match selected_feed
         if let Some(feed_id) = self.selected_feed {
-            self.selected_feed_row_index = self.feed_rows.iter().position(|row| {
+            let found = self.feed_rows.iter().position(|row| {
                 if let FeedRow::FeedItem { feed_index } = row {
                     self.feeds.get(*feed_index).map(|f| f.id) == Some(feed_id)
                 } else {
                     false
                 }
             });
+            self.selected_feed_row_index = found
+                .or(prev_row_index)
+                .map(|i| i.min(self.feed_rows.len().saturating_sub(1)));
         }
     }
 
@@ -668,6 +789,67 @@ mod tests {
         assert!(!state.saved_only);
         state.reduce(Action::ToggleSavedFilter);
         assert!(state.saved_only);
+    }
+
+    #[test]
+    fn hide_read_feeds_filters_rows() {
+        let mut state = AppState::default();
+        let feeds = vec![sample_feed(1, "Alpha", None), sample_feed(2, "Beta", None)];
+        state.reduce(Action::FeedsLoaded(feeds));
+        // Alpha has 3 unread, Beta has 0
+        state.reduce(Action::UpdateUnreadCounts(vec![(1, 3)]));
+        state.flush_feed_rows();
+        // All + Alpha + Beta = 3 rows
+        assert_eq!(state.feed_rows.len(), 3);
+
+        // Enable hide_read_feeds
+        state.hide_read_feeds = true;
+        state.rebuild_feed_rows();
+        // All + Alpha only = 2 rows (Beta hidden)
+        assert_eq!(state.feed_rows.len(), 2);
+        assert!(matches!(state.feed_rows[0], FeedRow::AllFeeds));
+        assert!(matches!(
+            state.feed_rows[1],
+            FeedRow::FeedItem { feed_index: 0 }
+        ));
+
+        // Disable again
+        state.hide_read_feeds = false;
+        state.rebuild_feed_rows();
+        assert_eq!(state.feed_rows.len(), 3);
+    }
+
+    #[test]
+    fn hide_read_feeds_hides_empty_groups() {
+        let mut state = AppState::default();
+        let feeds = vec![
+            sample_feed(1, "A", Some(100)),
+            sample_feed(2, "B", Some(200)),
+        ];
+        let groups = vec![
+            Group {
+                id: 100,
+                name: "Tech".to_string(),
+                position: 0,
+            },
+            Group {
+                id: 200,
+                name: "News".to_string(),
+                position: 1,
+            },
+        ];
+        state.reduce(Action::FeedsLoaded(feeds));
+        state.reduce(Action::GroupsLoaded(groups));
+        // Only feed 1 has unread
+        state.reduce(Action::UpdateUnreadCounts(vec![(1, 5)]));
+        state.flush_feed_rows();
+        // All + Tech header + feed A + News header + feed B = 5
+        assert_eq!(state.feed_rows.len(), 5);
+
+        state.hide_read_feeds = true;
+        state.rebuild_feed_rows();
+        // All + Tech header + feed A = 3 (News group hidden entirely)
+        assert_eq!(state.feed_rows.len(), 3);
     }
 
     #[test]

@@ -46,6 +46,10 @@ pub enum Modal {
         title: String,
         value: String,
     },
+    FeedInfo {
+        title: String,
+        url: String,
+    },
     Discovering,
     SelectDiscoveredFeed {
         feeds: Vec<DiscoveredFeed>,
@@ -173,6 +177,7 @@ fn draw_entries_panel(
         theme,
         entry_width,
         lang,
+        &state.selected_entries,
     );
     frame.render_stateful_widget(entries, list_area, &mut entry_state);
 
@@ -243,16 +248,20 @@ fn draw_preview_panel(
     );
     render_separator(frame, theme, split[1]);
 
+    let title_height = parts.title_lines.len() as u16;
     let content_split = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(1),
+            Constraint::Length(title_height),
             Constraint::Length(1),
             Constraint::Length(1),
             Constraint::Min(1),
         ])
         .split(preview_inner);
-    frame.render_widget(Paragraph::new(parts.title), content_split[0]);
+    frame.render_widget(
+        Paragraph::new(Text::from(parts.title_lines)),
+        content_split[0],
+    );
     frame.render_widget(Paragraph::new(parts.meta), content_split[1]);
     frame.render_widget(Paragraph::new(""), content_split[2]);
     state.preview_body_area = content_split[3];
@@ -337,6 +346,23 @@ fn draw_modal(
         }
         Modal::Help { scroll } => {
             draw_help_modal(frame, theme, area, scroll, lang);
+        }
+        Modal::FeedInfo { title, url } => {
+            let text = Text::from(vec![
+                Line::from(""),
+                Line::from(vec![
+                    Span::styled(format!("{}: ", lang.name_label), theme.dim_style()),
+                    Span::raw(title),
+                ]),
+                Line::from(""),
+                Line::from(vec![
+                    Span::styled(format!("{}: ", lang.url_label), theme.dim_style()),
+                    Span::raw(url),
+                ]),
+                Line::from(""),
+                Line::from(Span::styled("Esc", theme.dim_style())),
+            ]);
+            frame.render_widget(modal(&lang.feed_info_title, text, theme), area);
         }
         Modal::Discovering => {
             let spinner = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
@@ -463,14 +489,25 @@ fn draw_help_modal(frame: &mut Frame<'_>, theme: &Theme, area: Rect, scroll: u16
             &lang.help_manage_categories,
         ),
         row("R", &lang.help_mark_feed_read, "S", &lang.help_cycle_sort),
+        row("i", &lang.help_feed_info, ".", &lang.help_toggle_read_feeds),
         row("t", &lang.help_toggle_time, "", ""),
         Line::from(""),
         heading(&lang.help_entries),
         separator.clone(),
-        row("m", &lang.help_toggle_read, "M", &lang.help_mark_all_read),
-        row("s", &lang.help_save_later, "/", &lang.help_search),
-        row("o", &lang.help_open_browser, "Tab", &lang.help_next_link),
-        row("Shift-Tab", &lang.help_prev_link, "", ""),
+        row(
+            "Space",
+            &lang.help_select_entry,
+            "m",
+            &lang.help_toggle_read,
+        ),
+        row("M", &lang.help_mark_all_read, "s", &lang.help_save_later),
+        row("/", &lang.help_search, "o", &lang.help_open_browser),
+        row(
+            "Tab",
+            &lang.help_next_link,
+            "Shift-Tab",
+            &lang.help_prev_link,
+        ),
         Line::from(""),
         heading(&lang.help_general),
         separator,

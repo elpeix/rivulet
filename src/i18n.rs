@@ -116,6 +116,7 @@ pub struct Lang {
     pub category_title: String,
     pub categories_title: String,
     pub help_title: String,
+    pub feed_info_title: String,
 
     // Labels
     pub name_label: String,
@@ -128,6 +129,8 @@ pub struct Lang {
     pub filter_unread: String,
     pub filter_saved: String,
     pub filter_all_time: String,
+    pub filter_hide_read: String,
+    pub filter_show_read: String,
 
     // Instructions
     pub enter_confirm_esc_cancel: String,
@@ -164,6 +167,7 @@ pub struct Lang {
     pub help_toggle_saved: String,
     pub help_assign_category: String,
     pub help_manage_categories: String,
+    pub help_select_entry: String,
     pub help_toggle_read: String,
     pub help_mark_all_read: String,
     pub help_mark_feed_read: String,
@@ -172,6 +176,8 @@ pub struct Lang {
     pub help_search: String,
     pub help_cycle_sort: String,
     pub help_toggle_time: String,
+    pub help_toggle_read_feeds: String,
+    pub help_feed_info: String,
     pub help_toggle_help: String,
     pub help_quit: String,
 
@@ -257,6 +263,7 @@ impl Lang {
             category_title: get!(map, en, "category_title"),
             categories_title: get!(map, en, "categories_title"),
             help_title: get!(map, en, "help_title"),
+            feed_info_title: get!(map, en, "feed_info_title"),
 
             name_label: get!(map, en, "name_label"),
             query_label: get!(map, en, "query_label"),
@@ -268,6 +275,8 @@ impl Lang {
             filter_unread: get!(map, en, "filter_unread"),
             filter_saved: get!(map, en, "filter_saved"),
             filter_all_time: get!(map, en, "filter_all_time"),
+            filter_hide_read: get!(map, en, "filter_hide_read"),
+            filter_show_read: get!(map, en, "filter_show_read"),
 
             enter_confirm_esc_cancel: get!(map, en, "enter_confirm_esc_cancel"),
             y_confirm_n_cancel: get!(map, en, "y_confirm_n_cancel"),
@@ -301,6 +310,7 @@ impl Lang {
             help_toggle_saved: get!(map, en, "help_toggle_saved"),
             help_assign_category: get!(map, en, "help_assign_category"),
             help_manage_categories: get!(map, en, "help_manage_categories"),
+            help_select_entry: get!(map, en, "help_select_entry"),
             help_toggle_read: get!(map, en, "help_toggle_read"),
             help_mark_all_read: get!(map, en, "help_mark_all_read"),
             help_mark_feed_read: get!(map, en, "help_mark_feed_read"),
@@ -309,6 +319,8 @@ impl Lang {
             help_search: get!(map, en, "help_search"),
             help_cycle_sort: get!(map, en, "help_cycle_sort"),
             help_toggle_time: get!(map, en, "help_toggle_time"),
+            help_toggle_read_feeds: get!(map, en, "help_toggle_read_feeds"),
+            help_feed_info: get!(map, en, "help_feed_info"),
             help_toggle_help: get!(map, en, "help_toggle_help"),
             help_quit: get!(map, en, "help_quit"),
 

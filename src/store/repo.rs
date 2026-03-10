@@ -524,6 +524,36 @@ impl Repo {
         )?;
         Ok(())
     }
+
+    pub fn mark_all_saved(&self, entry_ids: &[i64], saved_at: i64) -> Result<()> {
+        let tx = self.conn.unchecked_transaction()?;
+        for &id in entry_ids {
+            tx.execute(
+                "UPDATE entries SET saved_at = ?1 WHERE id = ?2;",
+                params![saved_at, id],
+            )?;
+        }
+        tx.commit()
+    }
+
+    pub fn mark_all_unsaved(&self, entry_ids: &[i64]) -> Result<()> {
+        let tx = self.conn.unchecked_transaction()?;
+        for &id in entry_ids {
+            tx.execute(
+                "UPDATE entries SET saved_at = NULL WHERE id = ?1;",
+                params![id],
+            )?;
+        }
+        tx.commit()
+    }
+
+    pub fn mark_all_unread(&self, entry_ids: &[i64]) -> Result<()> {
+        let tx = self.conn.unchecked_transaction()?;
+        for &id in entry_ids {
+            tx.execute("DELETE FROM read_state WHERE entry_id = ?1;", params![id])?;
+        }
+        tx.commit()
+    }
 }
 
 fn map_feed_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Feed> {

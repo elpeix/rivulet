@@ -11,7 +11,8 @@ A terminal RSS reader built with Rust and [ratatui](https://github.com/ratatui-o
 - **Dual layout** — 3-column (Feeds | Entries | Preview) or 2-column split mode, toggle with `w`
 - **Feed categories** — Group feeds by topic with collapsible sections
 - **Rich HTML preview** — Bold, italic, links, code blocks, lists
-- **Smart filtering** — Unread, saved, configurable time filter, incremental search
+- **Smart filtering** — Unread, saved, configurable time filter, hide read feeds, incremental search
+- **Multi-select** — Select multiple entries with Space, then bulk mark read or save
 - **Entry sorting** — By date (newest/oldest first) or title A-Z
 - **Mouse support** — Click to select, scroll to navigate
 - **Mark read** — Mark individual entries, all visible, or entire feed as read
@@ -20,7 +21,7 @@ A terminal RSS reader built with Rust and [ratatui](https://github.com/ratatui-o
 - **Feed auto-discovery** — Paste a website URL and Rivulet finds the RSS/Atom feed automatically
 - **OPML import/export** — Migrate feeds from/to other RSS readers
 - **Auto-refresh** — Configurable periodic refresh (default: 30 min)
-- **Themes** — Dark, light, and terminal-adaptive themes
+- **Themes** — Terminal-adaptive (default), dark, light, and custom themes
 - **i18n** — English and Catalan
 - **Local SQLite storage** — No external services required
 
@@ -76,7 +77,7 @@ Categories are preserved during import and export.
 | `H` / `L` | Resize focused panel |
 | `w` | Toggle layout (columns / split) |
 | `Enter` | Select feed / open entry |
-| `Space` | Collapse/expand category |
+| `Space` | Collapse/expand category (feeds) / select entry (entries) |
 | `Esc` | Back |
 | **Feeds** | |
 | `a` | Add feed |
@@ -89,6 +90,8 @@ Categories are preserved during import and export.
 | `C` | Manage categories |
 | `R` | Mark feed as read |
 | `S` | Cycle sort mode |
+| `i` | Feed info (name and URL) |
+| `.` | Hide/show read feeds |
 | `t` | Toggle time filter |
 | **Entries** | |
 | `m` | Toggle read/unread |
@@ -109,7 +112,8 @@ language = "en"         # or "ca" for Catalan
 refresh_minutes = 30    # auto-refresh interval (0 to disable)
 recent_days = 30        # time filter window in days
 layout = "columns"      # or "split" for 2-column stacked layout
-theme = "dark"          # "dark", "light", "terminal", or custom name
+theme = "terminal"      # "terminal", "dark", "light", or custom name
+hide_read_feeds = false  # hide feeds with no unread entries
 ```
 
 The config file is created automatically on first run.
