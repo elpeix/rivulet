@@ -63,7 +63,7 @@ impl App {
             HttpClient::new(FetchOptions::default()).map_err(|error| format!("{error}"))?;
 
         let runtime = tokio::runtime::Builder::new_multi_thread()
-            .worker_threads(1)
+            .worker_threads(2)
             .enable_all()
             .build()
             .map_err(|e| format!("Failed to create async runtime: {e}"))?;
@@ -74,7 +74,7 @@ impl App {
             recent_days,
             db,
             client,
-            max_concurrency: 6,
+            max_concurrency: 8,
             refresh_rx: None,
             discovery_rx: None,
             runtime: Arc::new(runtime),
@@ -164,6 +164,9 @@ impl App {
                 })?;
             }
             Action::MarkUnread(id) => self.send_and_handle(DbCommand::MarkUnread(id))?,
+            Action::MarkAllUnread(ids) => {
+                self.send_and_handle(DbCommand::MarkAllUnread(ids))?;
+            }
             Action::MarkAllRead(ids) => {
                 self.send_and_handle(DbCommand::MarkAllRead {
                     entry_ids: ids,
@@ -183,6 +186,15 @@ impl App {
                 })?;
             }
             Action::MarkUnsaved(id) => self.send_and_handle(DbCommand::MarkUnsaved(id))?,
+            Action::MarkAllSaved(ids) => {
+                self.send_and_handle(DbCommand::MarkAllSaved {
+                    entry_ids: ids,
+                    saved_at: now_timestamp(),
+                })?;
+            }
+            Action::MarkAllUnsaved(ids) => {
+                self.send_and_handle(DbCommand::MarkAllUnsaved(ids))?;
+            }
 
             // Groups
             Action::LoadGroups => self.send_and_handle(DbCommand::ListGroups)?,

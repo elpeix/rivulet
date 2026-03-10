@@ -21,6 +21,7 @@ pub struct Theme {
     pub status_err: Color,
     pub accent: Color,
     pub accent_alt: Color,
+    pub selection_bg: Color,
 }
 
 #[derive(Debug, Deserialize)]
@@ -41,6 +42,7 @@ struct ThemeFile {
     status_err: String,
     accent: String,
     accent_alt: String,
+    selection_bg: Option<String>,
 }
 
 fn parse_color(s: &str) -> Option<Color> {
@@ -105,6 +107,11 @@ impl ThemeFile {
             status_err: parse_color(&self.status_err)?,
             accent: parse_color(&self.accent)?,
             accent_alt: parse_color(&self.accent_alt)?,
+            selection_bg: self
+                .selection_bg
+                .as_deref()
+                .and_then(parse_color)
+                .unwrap_or(Color::Rgb(50, 50, 70)),
         })
     }
 }
@@ -167,6 +174,7 @@ impl Theme {
             status_err: Color::Rgb(228, 104, 118),
             accent: Color::Rgb(126, 156, 216),
             accent_alt: Color::Rgb(220, 165, 97),
+            selection_bg: Color::Rgb(50, 50, 70),
         }
     }
 
@@ -188,6 +196,7 @@ impl Theme {
             status_err: Color::Rgb(180, 30, 40),
             accent: Color::Rgb(20, 70, 150),
             accent_alt: Color::Rgb(160, 85, 10),
+            selection_bg: Color::Rgb(200, 210, 230),
         }
     }
 
@@ -209,6 +218,7 @@ impl Theme {
             status_err: Color::Red,
             accent: Color::Cyan,
             accent_alt: Color::Yellow,
+            selection_bg: Color::DarkGray,
         }
     }
 

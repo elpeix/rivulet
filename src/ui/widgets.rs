@@ -2,6 +2,8 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Block, BorderType, Borders, List, ListItem, Paragraph, Wrap};
 
+use std::collections::HashSet;
+
 use crate::app::state::{AppState, FeedRow, StatusKind};
 use crate::i18n::Lang;
 use crate::store::models::{Entry, Feed, Group};
@@ -13,6 +15,38 @@ use unicode_width::UnicodeWidthStr;
 
 fn str_width(s: &str) -> usize {
     UnicodeWidthStr::width(s)
+}
+
+fn wrap_text(text: &str, max_width: usize) -> Vec<String> {
+    if max_width == 0 {
+        return vec![text.to_string()];
+    }
+    let mut lines = Vec::new();
+    let mut current = String::new();
+    let mut current_width = 0;
+
+    for word in text.split_whitespace() {
+        let word_width = str_width(word);
+        if current.is_empty() {
+            current = word.to_string();
+            current_width = word_width;
+        } else if current_width + 1 + word_width <= max_width {
+            current.push(' ');
+            current.push_str(word);
+            current_width += 1 + word_width;
+        } else {
+            lines.push(current);
+            current = word.to_string();
+            current_width = word_width;
+        }
+    }
+    if !current.is_empty() {
+        lines.push(current);
+    }
+    if lines.is_empty() {
+        lines.push(String::new());
+    }
+    lines
 }
 
 pub fn feeds_list<'a>(
@@ -158,6 +192,7 @@ pub fn entries_list<'a>(
     theme: &Theme,
     max_width: u16,
     lang: &'a Lang,
+    selected_entries: &HashSet<i64>,
 ) -> List<'a> {
     // Pre-compute feed name column width when showing feeds
     let feed_col_width = if show_feed {
@@ -188,6 +223,7 @@ pub fn entries_list<'a>(
                 .unwrap_or(lang.no_title.as_str());
             let unread = entry.read_at.is_none();
             let saved = entry.saved_at.is_some();
+            let is_selected = selected_entries.contains(&entry.id);
             let date = entry
                 .published_at
                 .or(Some(entry.fetched_at))
@@ -207,10 +243,21 @@ pub fn entries_list<'a>(
             } else {
                 ""
             };
+            let select_marker = if is_selected { "\u{258c}" } else { " " };
+            let select_width = str_width(select_marker);
             let available = (max_width as usize).saturating_sub(1);
             let date_len = date.len();
 
             let mut spans = Vec::new();
+
+            spans.push(Span::styled(
+                select_marker,
+                if is_selected {
+                    Style::default().fg(theme.accent)
+                } else {
+                    Style::default()
+                },
+            ));
 
             if show_feed && feed_col_width > 0 {
                 let feed_name = feeds
@@ -234,12 +281,14 @@ pub fn entries_list<'a>(
             }
             let prefix_width = prefix.chars().count();
             let title_max = available
+                .saturating_sub(select_width)
                 .saturating_sub(feed_col_width)
                 .saturating_sub(prefix_width)
                 .saturating_sub(date_len)
                 .saturating_sub(1);
             let truncated = truncate_with_ellipsis(title, title_max);
             let padding = available
+                .saturating_sub(select_width)
                 .saturating_sub(feed_col_width)
                 .saturating_sub(prefix_width)
                 .saturating_sub(truncated.chars().count())
@@ -248,7 +297,11 @@ pub fn entries_list<'a>(
             spans.push(Span::raw(" ".repeat(padding)));
             spans.push(Span::styled(date, theme.dim_style()));
             let lines = vec![Line::from(spans)];
-            ListItem::new(lines)
+            let mut item = ListItem::new(lines);
+            if is_selected {
+                item = item.style(Style::default().bg(theme.selection_bg));
+            }
+            item
         })
         .collect();
 
@@ -258,7 +311,7 @@ pub fn entries_list<'a>(
 }
 
 pub struct PreviewParts<'a> {
-    pub title: Line<'a>,
+    pub title_lines: Vec<Line<'a>>,
     pub meta: Line<'a>,
     pub body_lines: Vec<Line<'static>>,
     pub body_len: usize,
@@ -278,10 +331,12 @@ pub fn preview_parts<'a>(
             .title
             .clone()
             .unwrap_or_else(|| lang.no_title.to_string());
-        let title_line = Line::from(Span::styled(
-            title,
-            Style::default().fg(theme.text).add_modifier(Modifier::BOLD),
-        ));
+        let title_style = Style::default().fg(theme.text).add_modifier(Modifier::BOLD);
+        let title_width = width.saturating_sub(2).max(20) as usize;
+        let title_lines = wrap_text(&title, title_width)
+            .into_iter()
+            .map(|s| Line::from(Span::styled(s, title_style)))
+            .collect::<Vec<_>>();
 
         let date = entry
             .published_at
@@ -290,7 +345,14 @@ pub fn preview_parts<'a>(
             .unwrap_or_default();
         let author = entry.author.clone().unwrap_or_default();
         let url = entry.url.clone().unwrap_or_default();
-        let meta_parts: Vec<&str> = [date.as_str(), author.as_str(), url.as_str()]
+        let other_len = [date.as_str(), author.as_str()]
+            .iter()
+            .filter(|s| !s.is_empty())
+            .map(|s| str_width(s) + 3) // " | " separator
+            .sum::<usize>();
+        let url_max = title_width.saturating_sub(other_len);
+        let url_truncated = truncate_with_ellipsis(&url, url_max);
+        let meta_parts: Vec<&str> = [date.as_str(), author.as_str(), url_truncated.as_str()]
             .iter()
             .filter(|s| !s.is_empty())
             .copied()
@@ -309,7 +371,7 @@ pub fn preview_parts<'a>(
         let body_len = rich.lines.len();
 
         PreviewParts {
-            title: title_line,
+            title_lines,
             meta: meta_line,
             body_lines: rich.lines,
             body_len,
@@ -318,7 +380,7 @@ pub fn preview_parts<'a>(
         }
     } else {
         PreviewParts {
-            title: Line::from(lang.no_entry_selected.as_str()),
+            title_lines: vec![Line::from(lang.no_entry_selected.as_str())],
             meta: Line::from(""),
             body_lines: vec![Line::from("")],
             body_len: 1,
@@ -381,6 +443,9 @@ pub fn status_bar<'a>(
     }
     if state.recent_only {
         filters.push(lang.filter_recent_days(recent_days));
+    }
+    if state.hide_read_feeds {
+        filters.push(lang.filter_hide_read.to_string());
     }
     let filter = if filters.is_empty() {
         lang.filter_all.to_string()
@@ -480,14 +545,24 @@ pub fn status_bar_height(state: &AppState, recent_days: i64, lang: &Lang, width:
         + feed_title.len()
         + "  |  ".len()
         + lang.filter_label.len();
+    let mut filter_parts: Vec<usize> = Vec::new();
     if state.unread_only {
-        left_w += lang.filter_unread.len();
-    } else if state.saved_only {
-        left_w += lang.filter_saved.len();
-    } else if state.recent_only {
-        left_w += lang.filter_recent_days(recent_days).len();
-    } else {
+        filter_parts.push(lang.filter_unread.len());
+    }
+    if state.saved_only {
+        filter_parts.push(lang.filter_saved.len());
+    }
+    if state.recent_only {
+        filter_parts.push(lang.filter_recent_days(recent_days).len());
+    }
+    if state.hide_read_feeds {
+        filter_parts.push(lang.filter_hide_read.len());
+    }
+    if filter_parts.is_empty() {
         left_w += lang.filter_all.len();
+    } else {
+        let separators = " + ".len() * filter_parts.len().saturating_sub(1);
+        left_w += filter_parts.iter().sum::<usize>() + separators;
     }
     if let Some(query) = state.search_query.as_deref()
         && !query.is_empty()

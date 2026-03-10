@@ -22,6 +22,7 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
                     None => 0,
                 };
                 app.state.selected_link_index = Some(next);
+                scroll_to_selected_link(&mut app.state);
             }
         }
         KeyCode::BackTab => {
@@ -32,6 +33,7 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
                     None => app.state.preview_links.len() - 1,
                 };
                 app.state.selected_link_index = Some(prev);
+                scroll_to_selected_link(&mut app.state);
             }
         }
         KeyCode::Char('1') => {
@@ -110,8 +112,8 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
                 open_selected_link_or_entry(app);
             }
         },
-        KeyCode::Char(' ') => {
-            if app.state.focus == Focus::Feeds {
+        KeyCode::Char(' ') => match app.state.focus {
+            Focus::Feeds => {
                 if let Some(row_idx) = app.state.selected_feed_row_index {
                     if let Some(FeedRow::GroupHeader { group_id, .. }) =
                         app.state.feed_rows.get(row_idx)
@@ -121,7 +123,15 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
                     }
                 }
             }
-        }
+            Focus::Entries => {
+                if let Some(entry_id) = app.state.selected_entry {
+                    if !app.state.selected_entries.remove(&entry_id) {
+                        app.state.selected_entries.insert(entry_id);
+                    }
+                }
+            }
+            Focus::Preview => {}
+        },
         KeyCode::Char('r') => {
             let _ = app.dispatch(Action::RefreshFeeds);
         }
@@ -132,6 +142,17 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
         KeyCode::Char('g') => {
             let _ = app.dispatch(Action::ToggleSavedFilter);
             dispatch_load_entries(app);
+        }
+        KeyCode::Char('.') => {
+            app.state.hide_read_feeds = !app.state.hide_read_feeds;
+            app.state.rebuild_feed_rows();
+            crate::config::Config::save_hide_read_feeds(app.state.hide_read_feeds);
+            let msg = if app.state.hide_read_feeds {
+                app.lang.filter_hide_read.to_string()
+            } else {
+                app.lang.filter_show_read.to_string()
+            };
+            let _ = app.dispatch(Action::SetStatus(msg));
         }
         KeyCode::Char('t') => {
             app.state.recent_only = !app.state.recent_only;
@@ -144,7 +165,36 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
             dispatch_load_entries(app);
         }
         KeyCode::Char('m') => {
-            if let Some(entry_id) = app.state.selected_entry {
+            if !app.state.selected_entries.is_empty() {
+                let ids: Vec<i64> = app.state.selected_entries.iter().copied().collect();
+                let timestamp = now_timestamp();
+                // If any selected entry is unread, mark all as read; otherwise mark all as unread
+                let any_unread = ids.iter().any(|id| {
+                    app.state
+                        .entry_position(*id)
+                        .map(|i| app.state.entries[i].read_at.is_none())
+                        .unwrap_or(false)
+                });
+                if any_unread {
+                    for &id in &ids {
+                        if let Some(idx) = app.state.entry_position(id) {
+                            if app.state.entries[idx].read_at.is_none() {
+                                app.state.entries[idx].read_at = Some(timestamp);
+                            }
+                        }
+                    }
+                    let _ = app.dispatch(Action::MarkAllRead(ids));
+                } else {
+                    for &id in &ids {
+                        if let Some(idx) = app.state.entry_position(id) {
+                            app.state.entries[idx].read_at = None;
+                        }
+                    }
+                    let _ = app.dispatch(Action::MarkAllUnread(ids));
+                }
+                app.state.selected_entries.clear();
+                let _ = app.dispatch(Action::RefreshUnreadCounts);
+            } else if let Some(entry_id) = app.state.selected_entry {
                 if let Some(idx) = app.state.entry_position(entry_id) {
                     if app.state.entries[idx].read_at.is_none() {
                         let timestamp = now_timestamp();
@@ -209,7 +259,36 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
             open_selected_link_or_entry(app);
         }
         KeyCode::Char('s') => {
-            if let Some(entry_id) = app.state.selected_entry {
+            if !app.state.selected_entries.is_empty() {
+                let ids: Vec<i64> = app.state.selected_entries.iter().copied().collect();
+                let timestamp = now_timestamp();
+                let any_unsaved = ids.iter().any(|id| {
+                    app.state
+                        .entry_position(*id)
+                        .map(|i| app.state.entries[i].saved_at.is_none())
+                        .unwrap_or(false)
+                });
+                if any_unsaved {
+                    for &id in &ids {
+                        if let Some(idx) = app.state.entry_position(id) {
+                            if app.state.entries[idx].saved_at.is_none() {
+                                app.state.entries[idx].saved_at = Some(timestamp);
+                            }
+                        }
+                    }
+                    let _ = app.dispatch(Action::MarkAllSaved(ids));
+                } else {
+                    for &id in &ids {
+                        if let Some(idx) = app.state.entry_position(id) {
+                            app.state.entries[idx].saved_at = None;
+                        }
+                    }
+                    let _ = app.dispatch(Action::MarkAllUnsaved(ids));
+                }
+                app.state.selected_entries.clear();
+                let _ = app.dispatch(Action::RefreshUnreadCounts);
+                dispatch_load_entries(app);
+            } else if let Some(entry_id) = app.state.selected_entry {
                 if let Some(idx) = app.state.entry_position(entry_id) {
                     if app.state.entries[idx].saved_at.is_some() {
                         app.state.entries[idx].saved_at = None;
@@ -245,6 +324,13 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
             app.state.input_buffer.clear();
             let _ = app.dispatch(Action::SetStatus(app.lang.group_manage_hint.to_string()));
         }
+        KeyCode::Char('i') => {
+            if app.state.selected_feed.is_some() {
+                app.state.input_mode = InputMode::FeedInfo;
+            } else {
+                let _ = app.dispatch(Action::SetStatus(app.lang.no_feed_selected.to_string()));
+            }
+        }
         KeyCode::Char('e') => {
             if let Some(feed_id) = app.state.selected_feed {
                 if let Some(feed) = app.state.feeds.iter().find(|f| f.id == feed_id) {
@@ -276,7 +362,11 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
                 }
             }
             Focus::Entries => {
-                let _ = app.dispatch(Action::FocusFeeds);
+                if !app.state.selected_entries.is_empty() {
+                    app.state.selected_entries.clear();
+                } else {
+                    let _ = app.dispatch(Action::FocusFeeds);
+                }
             }
             Focus::Feeds => {
                 let _ = app.dispatch(Action::ClearStatus);
@@ -288,12 +378,33 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
     false
 }
 
+fn scroll_to_selected_link(state: &mut crate::app::state::AppState) {
+    let url = match state
+        .selected_link_index
+        .and_then(|i| state.preview_links.get(i))
+    {
+        Some(u) => u.clone(),
+        None => return,
+    };
+    // Find the first link region matching the selected URL
+    if let Some(region) = state.preview_link_regions.iter().find(|r| r.url == url) {
+        let line = (region.line).min(u16::MAX as usize) as u16;
+        let visible_height = state.preview_body_area.height;
+        let scroll = state.preview_scroll;
+        if line < scroll {
+            state.preview_scroll = line;
+        } else if line >= scroll + visible_height {
+            state.preview_scroll = line.saturating_sub(visible_height / 2);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::app::state::{Focus, InputMode};
     use crate::app::tests::test_app;
-    use crate::store::models::Feed;
+    use crate::store::models::{Entry, Feed};
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
     fn key(code: KeyCode) -> KeyEvent {
@@ -427,6 +538,106 @@ mod tests {
         app.state.preview_scroll = 10;
         handle_key(&mut app, key(KeyCode::Char('K')));
         assert!(app.state.preview_scroll < 10);
+    }
+
+    fn sample_entry(id: i64) -> Entry {
+        Entry {
+            id,
+            feed_id: 1,
+            title: Some(format!("Entry {id}")),
+            url: None,
+            author: None,
+            published_at: None,
+            fetched_at: 0,
+            summary: None,
+            content: None,
+            read_at: None,
+            saved_at: None,
+        }
+    }
+
+    fn app_with_entries() -> crate::app::App {
+        let mut app = test_app();
+        app.state.entries = vec![sample_entry(10), sample_entry(11), sample_entry(12)];
+        app.state.selected_entry = Some(10);
+        app.state.selected_entry_index = Some(0);
+        app.state.focus = Focus::Entries;
+        app
+    }
+
+    #[test]
+    fn space_toggles_entry_selection() {
+        let mut app = app_with_entries();
+        assert!(app.state.selected_entries.is_empty());
+
+        handle_key(&mut app, key(KeyCode::Char(' ')));
+        assert!(app.state.selected_entries.contains(&10));
+
+        // Toggle off
+        handle_key(&mut app, key(KeyCode::Char(' ')));
+        assert!(!app.state.selected_entries.contains(&10));
+    }
+
+    #[test]
+    fn space_selects_multiple_entries() {
+        let mut app = app_with_entries();
+
+        // Select first entry
+        handle_key(&mut app, key(KeyCode::Char(' ')));
+        assert!(app.state.selected_entries.contains(&10));
+
+        // Move down and select second
+        handle_key(&mut app, key(KeyCode::Down));
+        handle_key(&mut app, key(KeyCode::Char(' ')));
+        assert!(app.state.selected_entries.contains(&10));
+        assert!(app.state.selected_entries.contains(&11));
+        assert_eq!(app.state.selected_entries.len(), 2);
+    }
+
+    #[test]
+    fn esc_clears_selection_before_changing_focus() {
+        let mut app = app_with_entries();
+
+        handle_key(&mut app, key(KeyCode::Char(' ')));
+        assert!(!app.state.selected_entries.is_empty());
+
+        // First Esc clears selection, stays in Entries
+        handle_key(&mut app, key(KeyCode::Esc));
+        assert!(app.state.selected_entries.is_empty());
+        assert_eq!(app.state.focus, Focus::Entries);
+
+        // Second Esc goes to Feeds
+        handle_key(&mut app, key(KeyCode::Esc));
+        assert_eq!(app.state.focus, Focus::Feeds);
+    }
+
+    #[test]
+    fn i_with_feed_enters_feed_info_mode() {
+        let mut app = test_app();
+        app.state.selected_feed = Some(1);
+        handle_key(&mut app, key(KeyCode::Char('i')));
+        assert_eq!(app.state.input_mode, InputMode::FeedInfo);
+    }
+
+    #[test]
+    fn i_without_feed_shows_error() {
+        let mut app = test_app();
+        app.state.selected_feed = None;
+        handle_key(&mut app, key(KeyCode::Char('i')));
+        assert_eq!(app.state.input_mode, InputMode::None);
+        let status = app.state.status.as_ref().expect("status should be set");
+        assert!(status.message.contains(&app.lang.no_feed_selected));
+    }
+
+    #[test]
+    fn entries_loaded_clears_selection() {
+        let mut app = app_with_entries();
+        app.state.selected_entries.insert(10);
+        app.state.selected_entries.insert(11);
+
+        app.state
+            .reduce(Action::EntriesLoaded(vec![sample_entry(20)]));
+        assert!(app.state.selected_entries.is_empty());
     }
 }
 

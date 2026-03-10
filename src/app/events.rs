@@ -46,6 +46,7 @@ pub enum DbCommand {
         read_at: i64,
     },
     MarkUnread(i64),
+    MarkAllUnread(Vec<i64>),
     MarkAllRead {
         entry_ids: Vec<i64>,
         read_at: i64,
@@ -59,6 +60,11 @@ pub enum DbCommand {
         saved_at: i64,
     },
     MarkUnsaved(i64),
+    MarkAllSaved {
+        entry_ids: Vec<i64>,
+        saved_at: i64,
+    },
+    MarkAllUnsaved(Vec<i64>),
     UnreadCountAll {
         since: Option<i64>,
     },
@@ -210,6 +216,9 @@ fn handle_command(repo: &Repo, command: DbCommand) -> DbResponse {
             DbResponse::Ok(map_result(repo.mark_read(entry_id, read_at)))
         }
         DbCommand::MarkUnread(entry_id) => DbResponse::Ok(map_result(repo.mark_unread(entry_id))),
+        DbCommand::MarkAllUnread(entry_ids) => {
+            DbResponse::Ok(map_result(repo.mark_all_unread(&entry_ids)))
+        }
         DbCommand::MarkAllRead { entry_ids, read_at } => {
             DbResponse::Ok(map_result(repo.mark_all_read(&entry_ids, read_at)))
         }
@@ -220,6 +229,13 @@ fn handle_command(repo: &Repo, command: DbCommand) -> DbResponse {
             DbResponse::Ok(map_result(repo.mark_saved(entry_id, saved_at)))
         }
         DbCommand::MarkUnsaved(entry_id) => DbResponse::Ok(map_result(repo.mark_unsaved(entry_id))),
+        DbCommand::MarkAllSaved {
+            entry_ids,
+            saved_at,
+        } => DbResponse::Ok(map_result(repo.mark_all_saved(&entry_ids, saved_at))),
+        DbCommand::MarkAllUnsaved(entry_ids) => {
+            DbResponse::Ok(map_result(repo.mark_all_unsaved(&entry_ids)))
+        }
         DbCommand::UnreadCountAll { since } => {
             DbResponse::Count(map_result(repo.unread_count_all(since)))
         }

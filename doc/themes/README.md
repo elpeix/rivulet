@@ -22,12 +22,12 @@ Community theme files for Rivulet. Copy any `.toml` file to `~/.config/rivulet/t
 
 ## Creating your own theme
 
-Create a `.toml` file with all 16 color fields. Colors can be:
+Create a `.toml` file with the required color fields. Colors can be:
 
 - **Hex**: `"#RRGGBB"` (e.g. `"#282828"`)
 - **Named**: `black`, `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`, `white`, `gray`, `dark_gray`, `light_red`, `light_green`, `light_yellow`, `light_blue`, `light_magenta`, `light_cyan`, `reset`
 
-All 16 fields are required:
+Required fields (16):
 
 ```
 header_bg, border, focus_border, focus_title,
@@ -35,5 +35,11 @@ highlight_bg, highlight_fg, focus_bg, block_bg,
 feeds_bg, preview_bg, text, dim,
 status_ok, status_err, accent, accent_alt
 ```
+
+Optional fields:
+
+| Field | Description | Default |
+|---|---|---|
+| `selection_bg` | Background for multi-selected entries | `#323246` (dark) / `dark_gray` (terminal) |
 
 Use `reset` for colors that should inherit from the terminal (useful for the `terminal` built-in theme style).

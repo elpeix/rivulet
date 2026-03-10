@@ -59,6 +59,13 @@ pub fn handle_input_mode(app: &mut App, key: KeyEvent) -> bool {
         InputMode::SelectDiscoveredFeed { feeds, group_id } => {
             return handle_select_discovered_feed(app, key, &feeds, group_id);
         }
+        InputMode::FeedInfo => {
+            if key.code == KeyCode::Esc {
+                app.state.input_mode = InputMode::None;
+                let _ = app.dispatch(Action::ClearStatus);
+            }
+            return false;
+        }
         InputMode::Discovering => {
             if key.code == KeyCode::Esc {
                 app.cancel_discovery();
@@ -480,6 +487,20 @@ pub fn current_modal(state: &AppState, lang: &Lang) -> Option<ui::Modal> {
             title: lang.rename_category.to_string(),
             value: state.input_buffer.clone(),
         }),
+        InputMode::FeedInfo => {
+            let feed = state
+                .selected_feed
+                .and_then(|id| state.feeds.iter().find(|f| f.id == id));
+            if let Some(feed) = feed {
+                let title = feed.display_title().unwrap_or(&lang.no_title).to_string();
+                Some(ui::Modal::FeedInfo {
+                    title,
+                    url: feed.url.clone(),
+                })
+            } else {
+                None
+            }
+        }
         InputMode::Discovering => Some(ui::Modal::Discovering),
         InputMode::SelectDiscoveredFeed { feeds, .. } => Some(ui::Modal::SelectDiscoveredFeed {
             feeds: feeds.clone(),
@@ -626,6 +647,22 @@ mod tests {
         app.state.modal_selection = 0; // first option = "No category" when groups is empty
         let closed = handle_input_mode(&mut app, key(KeyCode::Enter));
         assert!(closed);
+    }
+
+    #[test]
+    fn feed_info_esc_closes() {
+        let mut app = test_app();
+        app.state.input_mode = InputMode::FeedInfo;
+        handle_input_mode(&mut app, key(KeyCode::Esc));
+        assert_eq!(app.state.input_mode, InputMode::None);
+    }
+
+    #[test]
+    fn feed_info_ignores_other_keys() {
+        let mut app = test_app();
+        app.state.input_mode = InputMode::FeedInfo;
+        handle_input_mode(&mut app, key(KeyCode::Char('a')));
+        assert_eq!(app.state.input_mode, InputMode::FeedInfo);
     }
 
     #[test]

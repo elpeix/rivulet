@@ -16,7 +16,7 @@ impl Default for FetchOptions {
     fn default() -> Self {
         Self {
             user_agent: "rivulet/0.1".to_string(),
-            timeout: Duration::from_secs(15),
+            timeout: Duration::from_secs(10),
         }
     }
 }

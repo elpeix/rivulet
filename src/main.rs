@@ -223,6 +223,7 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io::Result<
     let mut app = App::new(db, lang, config.recent_days)
         .map_err(|error| io::Error::other(format!("App: {error}")))?;
     app.state.layout_mode = config.layout_mode();
+    app.state.hide_read_feeds = config.hide_read_feeds;
     let theme = Theme::from_name(&config.theme);
 
     info!(
@@ -273,7 +274,9 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io::Result<
             }
         }
 
-        app.state.flush_feed_rows();
+        if app.state.flush_feed_rows() {
+            app::input::dispatch_load_entries(&mut app);
+        }
         let modal_state = current_modal(&app.state, &app.lang);
         terminal.draw(|frame| {
             ui::draw(
