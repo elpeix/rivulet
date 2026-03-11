@@ -122,6 +122,8 @@ impl App {
                 self.send_and_handle(DbCommand::ListFeeds)?;
             }
             Action::RefreshFeeds => self.refresh_feeds()?,
+            Action::RefreshFeed(feed_id) => self.refresh_single_feed(feed_id)?,
+            Action::RefreshFeedsByGroup(group_id) => self.refresh_feeds_by_group(group_id)?,
 
             // Entries
             Action::LoadEntriesFiltered {
@@ -486,10 +488,64 @@ impl App {
             return Ok(());
         }
 
-        self.state.refreshing = true;
         info!("Refreshing {} feeds", self.state.feeds.len());
+        let feeds: Vec<Feed> = self.state.feeds.clone();
+        self.spawn_refresh(feeds)
+    }
 
-        let feeds: Arc<Vec<Feed>> = Arc::new(self.state.feeds.clone());
+    fn refresh_single_feed(&mut self, feed_id: i64) -> Result<(), DbWorkerError> {
+        if self.refresh_rx.is_some() {
+            self.state
+                .reduce(Action::SetStatus(self.lang.already_refreshing.to_string()));
+            return Ok(());
+        }
+
+        let feed = match self.state.feeds.iter().find(|f| f.id == feed_id) {
+            Some(f) => f.clone(),
+            None => return Ok(()),
+        };
+
+        let name = feed
+            .custom_title
+            .as_deref()
+            .or(feed.title.as_deref())
+            .unwrap_or(&feed.url);
+        info!("Refreshing feed: {name}");
+        self.state
+            .reduce(Action::SetStatus(self.lang.refreshing_feed(name)));
+
+        self.spawn_refresh(vec![feed])
+    }
+
+    fn refresh_feeds_by_group(&mut self, group_id: Option<i64>) -> Result<(), DbWorkerError> {
+        if self.refresh_rx.is_some() {
+            self.state
+                .reduce(Action::SetStatus(self.lang.already_refreshing.to_string()));
+            return Ok(());
+        }
+
+        let feeds: Vec<Feed> = self
+            .state
+            .feeds
+            .iter()
+            .filter(|f| f.group_id == group_id)
+            .cloned()
+            .collect();
+
+        if feeds.is_empty() {
+            self.state
+                .reduce(Action::SetStatus(self.lang.no_feeds_to_refresh.to_string()));
+            return Ok(());
+        }
+
+        info!("Refreshing {} feeds for group {:?}", feeds.len(), group_id);
+        self.spawn_refresh(feeds)
+    }
+
+    fn spawn_refresh(&mut self, feeds: Vec<Feed>) -> Result<(), DbWorkerError> {
+        self.state.refreshing = true;
+
+        let feeds: Arc<Vec<Feed>> = Arc::new(feeds);
 
         let jobs: Vec<FetchJob> = feeds
             .iter()
@@ -908,6 +964,127 @@ mod tests {
         // The invalid URL should produce errors
         assert_eq!(complete.errors, 1);
         assert!(complete.last_error.is_some());
+    }
+
+    #[test]
+    fn refresh_single_feed_spawns_background_thread() {
+        let mut app = test_app();
+
+        let feed = NewFeed {
+            title: Some("Test Feed".to_string()),
+            url: "http://invalid.test/feed.xml".to_string(),
+            created_at: 0,
+        };
+        let _ = app.db.send(DbCommand::CreateFeed(feed));
+        let _ = app.dispatch(Action::LoadFeeds);
+        let feed_id = app.state.feeds[0].id;
+
+        let result = app.dispatch(Action::RefreshFeed(feed_id));
+        assert!(result.is_ok());
+        assert!(app.refreshing());
+
+        let status = app.state.status.as_ref().expect("status");
+        assert!(status.message.contains("Test Feed"));
+
+        let rx = app.refresh_rx.as_ref().unwrap();
+        let complete = rx.recv_timeout(std::time::Duration::from_secs(10)).unwrap();
+        app.refresh_rx = None;
+
+        assert_eq!(complete.errors, 1);
+        assert!(complete.last_error.is_some());
+    }
+
+    #[test]
+    fn refresh_single_feed_unknown_id_is_noop() {
+        let mut app = test_app();
+        let result = app.dispatch(Action::RefreshFeed(9999));
+        assert!(result.is_ok());
+        assert!(!app.refreshing());
+    }
+
+    #[test]
+    fn refresh_feeds_by_group_filters_correct_feeds() {
+        let mut app = test_app();
+
+        let feed1 = NewFeed {
+            title: Some("Feed A".to_string()),
+            url: "http://invalid.test/a.xml".to_string(),
+            created_at: 0,
+        };
+        let feed2 = NewFeed {
+            title: Some("Feed B".to_string()),
+            url: "http://invalid.test/b.xml".to_string(),
+            created_at: 0,
+        };
+        let _ = app.db.send(DbCommand::CreateFeed(feed1));
+        let _ = app.db.send(DbCommand::CreateFeed(feed2));
+        let _ = app.dispatch(Action::LoadFeeds);
+        assert_eq!(app.state.feeds.len(), 2);
+
+        // Assign feed A to group 10, feed B stays ungrouped (group_id = None)
+        app.state.feeds[0].group_id = Some(10);
+
+        let result = app.dispatch(Action::RefreshFeedsByGroup(Some(10)));
+        assert!(result.is_ok());
+        assert!(app.refreshing());
+
+        let rx = app.refresh_rx.as_ref().unwrap();
+        let complete = rx.recv_timeout(std::time::Duration::from_secs(10)).unwrap();
+        app.refresh_rx = None;
+
+        // Only 1 feed matched group 10
+        assert_eq!(complete.refreshed + complete.errors, 1);
+    }
+
+    #[test]
+    fn refresh_feeds_by_group_empty_group_is_noop() {
+        let mut app = test_app();
+
+        let feed = NewFeed {
+            title: Some("Feed A".to_string()),
+            url: "http://invalid.test/a.xml".to_string(),
+            created_at: 0,
+        };
+        let _ = app.db.send(DbCommand::CreateFeed(feed));
+        let _ = app.dispatch(Action::LoadFeeds);
+
+        // All feeds are ungrouped (group_id = None), refresh group 99 should find nothing
+        let result = app.dispatch(Action::RefreshFeedsByGroup(Some(99)));
+        assert!(result.is_ok());
+        assert!(!app.refreshing());
+    }
+
+    #[test]
+    fn refresh_feeds_by_group_none_refreshes_ungrouped() {
+        let mut app = test_app();
+
+        let feed1 = NewFeed {
+            title: Some("Grouped".to_string()),
+            url: "http://invalid.test/a.xml".to_string(),
+            created_at: 0,
+        };
+        let feed2 = NewFeed {
+            title: Some("Ungrouped".to_string()),
+            url: "http://invalid.test/b.xml".to_string(),
+            created_at: 0,
+        };
+        let _ = app.db.send(DbCommand::CreateFeed(feed1));
+        let _ = app.db.send(DbCommand::CreateFeed(feed2));
+        let _ = app.dispatch(Action::LoadFeeds);
+
+        // Assign first feed to a group
+        app.state.feeds[0].group_id = Some(10);
+
+        // Refresh ungrouped (group_id = None) should only refresh feed2
+        let result = app.dispatch(Action::RefreshFeedsByGroup(None));
+        assert!(result.is_ok());
+        assert!(app.refreshing());
+
+        let rx = app.refresh_rx.as_ref().unwrap();
+        let complete = rx.recv_timeout(std::time::Duration::from_secs(10)).unwrap();
+        app.refresh_rx = None;
+
+        assert_eq!(complete.refreshed + complete.errors, 1);
     }
 
     #[test]

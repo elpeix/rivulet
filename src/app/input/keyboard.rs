@@ -133,7 +133,8 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
             Focus::Preview => {}
         },
         KeyCode::Char('r') => {
-            let _ = app.dispatch(Action::RefreshFeeds);
+            let action = app.state.contextual_refresh_action();
+            let _ = app.dispatch(action);
         }
         KeyCode::Char('f') => {
             let _ = app.dispatch(Action::ToggleUnreadFilter);

@@ -212,6 +212,32 @@ impl AppState {
         self.entry_id_to_index.get(&id).copied()
     }
 
+    /// Returns the appropriate refresh action based on the current view context.
+    /// - Entries panel with a single feed selected → RefreshFeed
+    /// - Entries panel viewing a group/ungrouped → RefreshFeedsByGroup
+    /// - Otherwise → RefreshFeeds (all)
+    pub fn contextual_refresh_action(&self) -> Action {
+        if self.focus == Focus::Entries {
+            if let Some(feed_id) = self.selected_feed {
+                return Action::RefreshFeed(feed_id);
+            }
+            if self.viewing_group {
+                if let Some(row_idx) = self.selected_feed_row_index {
+                    match self.feed_rows.get(row_idx) {
+                        Some(FeedRow::GroupHeader { group_id, .. }) => {
+                            return Action::RefreshFeedsByGroup(Some(*group_id));
+                        }
+                        Some(FeedRow::UngroupedHeader { .. }) => {
+                            return Action::RefreshFeedsByGroup(None);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+        Action::RefreshFeeds
+    }
+
     fn rebuild_entry_index(&mut self) {
         self.entry_id_to_index.clear();
         for (i, entry) in self.entries.iter().enumerate() {
@@ -373,6 +399,8 @@ impl AppState {
             | Action::LoadAllEntries { .. }
             | Action::LoadEntriesForGroup { .. }
             | Action::RefreshFeeds
+            | Action::RefreshFeed(_)
+            | Action::RefreshFeedsByGroup(_)
             | Action::RefreshUnreadCounts
             | Action::AddFeed { .. }
             | Action::DeleteFeed(_)
@@ -1134,5 +1162,74 @@ mod tests {
 
         state.update_preview_matches(Vec::new());
         assert_eq!(state.preview_match_current, None);
+    }
+
+    #[test]
+    fn contextual_refresh_entries_with_feed_returns_refresh_feed() {
+        let mut state = AppState::default();
+        state.focus = Focus::Entries;
+        state.selected_feed = Some(42);
+        assert!(matches!(
+            state.contextual_refresh_action(),
+            Action::RefreshFeed(42)
+        ));
+    }
+
+    #[test]
+    fn contextual_refresh_entries_group_header_returns_refresh_by_group() {
+        let mut state = AppState::default();
+        state.focus = Focus::Entries;
+        state.selected_feed = None;
+        state.viewing_group = true;
+        state.feed_rows = vec![
+            FeedRow::AllFeeds,
+            FeedRow::GroupHeader {
+                group_id: 10,
+                name: "Tech".to_string(),
+                unread: 0,
+            },
+        ];
+        state.selected_feed_row_index = Some(1);
+        assert!(matches!(
+            state.contextual_refresh_action(),
+            Action::RefreshFeedsByGroup(Some(10))
+        ));
+    }
+
+    #[test]
+    fn contextual_refresh_entries_ungrouped_header_returns_refresh_none_group() {
+        let mut state = AppState::default();
+        state.focus = Focus::Entries;
+        state.selected_feed = None;
+        state.viewing_group = true;
+        state.feed_rows = vec![FeedRow::AllFeeds, FeedRow::UngroupedHeader { unread: 0 }];
+        state.selected_feed_row_index = Some(1);
+        assert!(matches!(
+            state.contextual_refresh_action(),
+            Action::RefreshFeedsByGroup(None)
+        ));
+    }
+
+    #[test]
+    fn contextual_refresh_feeds_panel_returns_refresh_all() {
+        let mut state = AppState::default();
+        state.focus = Focus::Feeds;
+        state.selected_feed = Some(42);
+        assert!(matches!(
+            state.contextual_refresh_action(),
+            Action::RefreshFeeds
+        ));
+    }
+
+    #[test]
+    fn contextual_refresh_entries_no_feed_no_group_returns_refresh_all() {
+        let mut state = AppState::default();
+        state.focus = Focus::Entries;
+        state.selected_feed = None;
+        state.viewing_group = false;
+        assert!(matches!(
+            state.contextual_refresh_action(),
+            Action::RefreshFeeds
+        ));
     }
 }

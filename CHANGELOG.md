@@ -8,6 +8,7 @@
   - **Feeds**: Filter feeds by name in real-time (case-insensitive)
   - **Entries**: Full-text search against the database
   - **Preview**: Highlight matching text with `n`/`N` navigation between matches
+- **Refresh selected feed from entries**: Press `r` in the Entries panel to refresh only the current feed
 - **Inline search bar**: Search input is now rendered at the bottom of each panel instead of a modal dialog
 - **Match counter in preview**: Shows current/total matches (e.g. `[2/5]`) during preview search
 

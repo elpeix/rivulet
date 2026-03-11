@@ -160,6 +160,7 @@ pub struct Lang {
     pub help_rename_feed: String,
     pub help_delete_feed: String,
     pub help_refresh_all: String,
+    pub help_refresh_feed: String,
     pub help_toggle_unread: String,
     pub help_toggle_saved: String,
     pub help_assign_category: String,
@@ -208,6 +209,7 @@ pub struct Lang {
     tpl_refreshed_summary: String,
     tpl_filter_recent_days: String,
     tpl_no_feed_found: String,
+    tpl_refreshing_feed: String,
 }
 
 impl Lang {
@@ -301,6 +303,7 @@ impl Lang {
             help_rename_feed: get!(map, en, "help_rename_feed"),
             help_delete_feed: get!(map, en, "help_delete_feed"),
             help_refresh_all: get!(map, en, "help_refresh_all"),
+            help_refresh_feed: get!(map, en, "help_refresh_feed"),
             help_toggle_unread: get!(map, en, "help_toggle_unread"),
             help_toggle_saved: get!(map, en, "help_toggle_saved"),
             help_assign_category: get!(map, en, "help_assign_category"),
@@ -344,6 +347,7 @@ impl Lang {
             tpl_refreshed_summary: get!(map, en, "refreshed_summary"),
             tpl_filter_recent_days: get!(map, en, "filter_recent_days"),
             tpl_no_feed_found: get!(map, en, "no_feed_found"),
+            tpl_refreshing_feed: get!(map, en, "refreshing_feed"),
         }
     }
 
@@ -387,6 +391,10 @@ impl Lang {
 
     pub fn no_feed_found(&self, url: &str) -> String {
         self.tpl_no_feed_found.replace("{url}", url)
+    }
+
+    pub fn refreshing_feed(&self, name: &str) -> String {
+        self.tpl_refreshing_feed.replace("{name}", name)
     }
 }
 

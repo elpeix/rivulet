@@ -46,7 +46,7 @@ Requires Rust 2024 edition (1.85+).
 rivulet
 ```
 
-Press `a` to add a feed. You can paste either a direct feed URL or a website URL — Rivulet will auto-discover the feed. Press `r` to refresh.
+Press `a` to add a feed. You can paste either a direct feed URL or a website URL — Rivulet will auto-discover the feed. Press `r` to refresh all feeds.
 
 ### OPML import/export
 
@@ -98,6 +98,7 @@ Categories are preserved during import and export.
 | `m` | Toggle read/unread |
 | `M` | Mark all visible as read |
 | `s` | Save for later |
+| `r` | Refresh selected feed |
 | `/` | Search (contextual: feeds / entries / preview) |
 | `n` / `N` | Next / previous search match (preview) |
 | `o` | Open in browser |

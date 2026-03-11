@@ -558,7 +558,12 @@ fn draw_help_modal(frame: &mut Frame<'_>, theme: &Theme, area: Rect, scroll: u16
         row("M", &lang.help_mark_all_read, "s", &lang.help_save_later),
         row("/", &lang.help_search, "n / N", &lang.help_search_next),
         row("o", &lang.help_open_browser, "Tab", &lang.help_next_link),
-        row("Shift-Tab", &lang.help_prev_link, "", ""),
+        row(
+            "Shift-Tab",
+            &lang.help_prev_link,
+            "r",
+            &lang.help_refresh_feed,
+        ),
         Line::from(""),
         heading(&lang.help_general),
         separator,
