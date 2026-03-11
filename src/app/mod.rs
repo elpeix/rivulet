@@ -401,24 +401,22 @@ impl App {
     fn set_search_query(&mut self, query: String) -> Result<(), DbWorkerError> {
         self.state.reduce(Action::SetSearchQuery(query.clone()));
         let since = self.since_cutoff();
-        if let Some(feed_id) = self.state.selected_feed {
-            if self.state.search_query.is_some() {
-                self.send_and_handle(DbCommand::SearchEntries {
-                    feed_id: Some(feed_id),
-                    query,
-                    unread_only: self.state.unread_only,
-                    saved_only: self.state.saved_only,
-                    since,
-                })?;
-            } else {
-                self.send_and_handle(DbCommand::EntriesForFeedFiltered {
-                    feed_id,
-                    unread_only: self.state.unread_only,
-                    saved_only: self.state.saved_only,
-                    since,
-                    sort_mode: self.state.sort_mode,
-                })?;
-            }
+        let unread_only = self.state.unread_only;
+        let saved_only = self.state.saved_only;
+
+        if self.state.search_query.is_some() {
+            // Determine feed_id from current view
+            let feed_id = self.state.selected_feed;
+            self.send_and_handle(DbCommand::SearchEntries {
+                feed_id,
+                query,
+                unread_only,
+                saved_only,
+                since,
+            })?;
+        } else {
+            // Query cleared: reload entries for current view
+            crate::app::input::dispatch_load_entries(self);
         }
         Ok(())
     }

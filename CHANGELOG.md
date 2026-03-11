@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.2.0] - 2026-03-11
+
+### Added
+
+- **Context-aware panel search**: `/` now searches differently depending on the focused panel:
+  - **Feeds**: Filter feeds by name in real-time (case-insensitive)
+  - **Entries**: Full-text search against the database
+  - **Preview**: Highlight matching text with `n`/`N` navigation between matches
+- **Inline search bar**: Search input is now rendered at the bottom of each panel instead of a modal dialog
+- **Match counter in preview**: Shows current/total matches (e.g. `[2/5]`) during preview search
+
+### Changed
+
+- `Esc` behavior is now layered: first clears the active search on the current panel, then navigates back
+- Search is automatically cleared when switching feeds
+- Help modal updated with `n`/`N` keybinding for next/previous match
+- **Status bar layout**: Refreshing spinner and notifications now appear before the unread count on the right side, with consistent separators
+
+### Internal
+
+- `InputMode::Search` replaced by `InputMode::PanelSearch` with `panel_search_focus` tracking which panel initiated the search
+- New state fields: `feed_filter_query`, `preview_search_query`, `preview_match_lines`, `preview_match_current`
+- `adjust_unread_count` optimises read/unread toggling by updating counters locally instead of dispatching `RefreshUnreadCounts` to the database
+- `highlight_spans` utility handles case-insensitive matching with correct multi-byte Unicode offset mapping
+- `element_link_url` extracted as shared helper, removing duplication between `extract_links` and `convert_line`
+- Removed unused i18n keys: `search_prompt`, `search_title`, `query_label`
+- New tests covering panel search, match navigation, Esc layering, highlight spans, and unread count adjustment
+
 ## [1.1.0] - 2026-03-10
 
 ### Added

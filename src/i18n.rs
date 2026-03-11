@@ -98,7 +98,6 @@ pub struct Lang {
     pub refresh_thread_crashed: String,
 
     // Prompts
-    pub search_prompt: String,
     pub add_feed_prompt: String,
     pub new_group_name: String,
     pub rename_prompt: String,
@@ -106,7 +105,6 @@ pub struct Lang {
     pub delete_group_confirm: String,
 
     // Modal titles
-    pub search_title: String,
     pub add_feed_title: String,
     pub rename_feed_title: String,
     pub rename_feed_hint: String,
@@ -120,7 +118,6 @@ pub struct Lang {
 
     // Labels
     pub name_label: String,
-    pub query_label: String,
     pub url_label: String,
     pub select_category: String,
     pub no_category: String,
@@ -174,6 +171,7 @@ pub struct Lang {
     pub help_save_later: String,
     pub help_open_browser: String,
     pub help_search: String,
+    pub help_search_next: String,
     pub help_cycle_sort: String,
     pub help_toggle_time: String,
     pub help_toggle_read_feeds: String,
@@ -246,14 +244,12 @@ impl Lang {
             entry_has_no_url: get!(map, en, "entry_has_no_url"),
             refresh_thread_crashed: get!(map, en, "refresh_thread_crashed"),
 
-            search_prompt: get!(map, en, "search_prompt"),
             add_feed_prompt: get!(map, en, "add_feed_prompt"),
             new_group_name: get!(map, en, "new_group_name"),
             rename_prompt: get!(map, en, "rename_prompt"),
             delete_feed_confirm: get!(map, en, "delete_feed_confirm"),
             delete_group_confirm: get!(map, en, "delete_group_confirm"),
 
-            search_title: get!(map, en, "search_title"),
             add_feed_title: get!(map, en, "add_feed_title"),
             rename_feed_title: get!(map, en, "rename_feed_title"),
             rename_feed_hint: get!(map, en, "rename_feed_hint"),
@@ -266,7 +262,6 @@ impl Lang {
             feed_info_title: get!(map, en, "feed_info_title"),
 
             name_label: get!(map, en, "name_label"),
-            query_label: get!(map, en, "query_label"),
             url_label: get!(map, en, "url_label"),
             select_category: get!(map, en, "select_category"),
             no_category: get!(map, en, "no_category"),
@@ -317,6 +312,7 @@ impl Lang {
             help_save_later: get!(map, en, "help_save_later"),
             help_open_browser: get!(map, en, "help_open_browser"),
             help_search: get!(map, en, "help_search"),
+            help_search_next: get!(map, en, "help_search_next"),
             help_cycle_sort: get!(map, en, "help_cycle_sort"),
             help_toggle_time: get!(map, en, "help_toggle_time"),
             help_toggle_read_feeds: get!(map, en, "help_toggle_read_feeds"),
