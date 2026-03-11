@@ -16,18 +16,26 @@ pub fn extract_links(tagged_lines: &[TaggedLine<Vec<RichAnnotation>>]) -> Vec<St
     let mut seen = std::collections::HashSet::new();
     for tl in tagged_lines {
         for element in tl.iter() {
-            if let TaggedLineElement::Str(ts) = element {
-                for ann in &ts.tag {
-                    if let RichAnnotation::Link(url) = ann {
-                        if seen.insert(url.clone()) {
-                            links.push(url.clone());
-                        }
-                    }
+            if let Some(url) = element_link_url(element) {
+                if seen.insert(url.clone()) {
+                    links.push(url.clone());
                 }
             }
         }
     }
     links
+}
+
+/// Extract the link URL from a tagged element, if it has one.
+pub fn element_link_url(element: &TaggedLineElement<Vec<RichAnnotation>>) -> Option<&String> {
+    if let TaggedLineElement::Str(ts) = element {
+        ts.tag.iter().find_map(|ann| match ann {
+            RichAnnotation::Link(url) => Some(url),
+            _ => None,
+        })
+    } else {
+        None
+    }
 }
 
 fn normalize_whitespace(input: &str) -> String {

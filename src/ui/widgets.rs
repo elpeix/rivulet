@@ -17,6 +17,76 @@ fn str_width(s: &str) -> usize {
     UnicodeWidthStr::width(s)
 }
 
+/// Split text into spans, highlighting case-insensitive matches of `query`.
+/// Works correctly with multi-byte characters where `to_lowercase()` may change
+/// byte length (e.g. Turkish İ) by building a mapping from lowercase byte offsets
+/// back to original string byte offsets.
+pub fn highlight_spans(
+    text: &str,
+    query: &str,
+    normal: Style,
+    highlight: Style,
+) -> Vec<Span<'static>> {
+    if query.is_empty() {
+        return vec![Span::styled(text.to_string(), normal)];
+    }
+    let lower_query = query.to_lowercase();
+
+    // Build lowercase text and a mapping: for each byte in lower_text,
+    // record which byte offset in `text` the corresponding char starts at.
+    let mut lower_text = String::new();
+    // Maps byte offset in lower_text → byte offset in text (one entry per char).
+    let mut lower_to_orig: Vec<(usize, usize)> = Vec::new();
+    for (orig_offset, ch) in text.char_indices() {
+        let lower_start = lower_text.len();
+        let orig_len = ch.len_utf8();
+        for lc in ch.to_lowercase() {
+            lower_text.push(lc);
+        }
+        let lower_len = lower_text.len() - lower_start;
+        lower_to_orig.push((lower_start, orig_offset));
+        // Also store end sentinel for the last char
+        lower_to_orig.push((lower_start + lower_len, orig_offset + orig_len));
+    }
+    // Deduplicate sentinel entries and ensure we can look up any lower offset
+    lower_to_orig.sort_unstable();
+    lower_to_orig.dedup();
+
+    let map_offset = |lower_off: usize| -> usize {
+        match lower_to_orig.binary_search_by_key(&lower_off, |&(lo, _)| lo) {
+            Ok(i) => lower_to_orig[i].1,
+            Err(i) if i > 0 => lower_to_orig[i - 1].1,
+            _ => 0,
+        }
+    };
+
+    let mut spans = Vec::new();
+    let mut last_orig = 0;
+    for (lower_start, _) in lower_text.match_indices(&lower_query) {
+        let lower_end = lower_start + lower_query.len();
+        let orig_start = map_offset(lower_start);
+        let orig_end = map_offset(lower_end);
+        if orig_start > last_orig {
+            spans.push(Span::styled(
+                text[last_orig..orig_start].to_string(),
+                normal,
+            ));
+        }
+        spans.push(Span::styled(
+            text[orig_start..orig_end].to_string(),
+            highlight,
+        ));
+        last_orig = orig_end;
+    }
+    if last_orig < text.len() {
+        spans.push(Span::styled(text[last_orig..].to_string(), normal));
+    }
+    if spans.is_empty() {
+        spans.push(Span::styled(text.to_string(), normal));
+    }
+    spans
+}
+
 fn wrap_text(text: &str, max_width: usize) -> Vec<String> {
     if max_width == 0 {
         return vec![text.to_string()];
@@ -169,12 +239,16 @@ pub fn feeds_list<'a>(
                 let truncated = truncate_with_ellipsis(title, title_max);
                 let used = str_width(indent) + str_width(&truncated) + str_width(&counter);
                 let gap = available.saturating_sub(used);
-                let line = Line::from(vec![
-                    Span::raw(indent.to_string()),
-                    Span::styled(truncated, base_style),
-                    Span::raw(" ".repeat(gap)),
-                    Span::styled(counter, theme.dim_style()),
-                ]);
+                let match_style = Style::default().fg(theme.highlight_fg).bg(theme.accent);
+                let mut spans = vec![Span::raw(indent.to_string())];
+                if let Some(ref q) = state.feed_filter_query {
+                    spans.extend(highlight_spans(&truncated, q, base_style, match_style));
+                } else {
+                    spans.push(Span::styled(truncated, base_style));
+                }
+                spans.push(Span::raw(" ".repeat(gap)));
+                spans.push(Span::styled(counter, theme.dim_style()));
+                let line = Line::from(spans);
                 Some(ListItem::new(line))
             }
         })
@@ -185,6 +259,7 @@ pub fn feeds_list<'a>(
         .highlight_symbol(highlight_symbol)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn entries_list<'a>(
     entries: &'a [Entry],
     feeds: &'a [Feed],
@@ -193,6 +268,7 @@ pub fn entries_list<'a>(
     max_width: u16,
     lang: &'a Lang,
     selected_entries: &HashSet<i64>,
+    search_query: Option<&str>,
 ) -> List<'a> {
     // Pre-compute feed name column width when showing feeds
     let feed_col_width = if show_feed {
@@ -293,8 +369,18 @@ pub fn entries_list<'a>(
                 .saturating_sub(prefix_width)
                 .saturating_sub(truncated.chars().count())
                 .saturating_sub(date_len);
-            spans.push(Span::styled(truncated, title_style));
-            spans.push(Span::raw(" ".repeat(padding)));
+            if let Some(q) = search_query {
+                let match_style = Style::default().fg(theme.highlight_fg).bg(theme.accent);
+                let padded = format!(
+                    "{:<width$}",
+                    truncated,
+                    width = truncated.chars().count() + padding
+                );
+                spans.extend(highlight_spans(&padded, q, title_style, match_style));
+            } else {
+                spans.push(Span::styled(truncated, title_style));
+                spans.push(Span::raw(" ".repeat(padding)));
+            }
             spans.push(Span::styled(date, theme.dim_style()));
             let lines = vec![Line::from(spans)];
             let mut item = ListItem::new(lines);
@@ -474,18 +560,16 @@ pub fn status_bar<'a>(
         left_spans.push(Span::styled(query, Style::default().fg(theme.accent)));
     }
 
-    // Right spans: unread | refreshing | status | help hint
+    // Right spans: refreshing | unread | status | help hint
     let mut right_spans = Vec::new();
-    let total = format!("{}: {}", lang.unread_label, state.total_unread);
-    right_spans.push(Span::styled(total, Style::default().fg(theme.text)));
 
     if state.refreshing {
         let frame = SPINNER_FRAMES[state.tick % SPINNER_FRAMES.len()];
-        right_spans.push(Span::raw("  "));
         right_spans.push(Span::styled(
             format!("{} {}", frame, lang.refreshing),
             Style::default().fg(theme.accent_alt),
         ));
+        right_spans.push(Span::styled("  |  ", theme.dim_style()));
     }
 
     if let Some(status) = state.status.as_ref() {
@@ -494,12 +578,15 @@ pub fn status_bar<'a>(
         } else {
             theme.status_ok
         };
-        right_spans.push(Span::raw("  |  "));
         right_spans.push(Span::styled(
             status.message.clone(),
             Style::default().fg(color),
         ));
+        right_spans.push(Span::styled("  |  ", theme.dim_style()));
     }
+
+    let total = format!("{}: {}", lang.unread_label, state.total_unread);
+    right_spans.push(Span::styled(total, Style::default().fg(theme.text)));
 
     right_spans.push(Span::raw("  |  "));
     right_spans.push(Span::styled(
@@ -782,5 +869,85 @@ mod tests {
         assert_eq!(str_width("\u{2605} "), 2);
         assert_eq!(str_width("\u{25b6} "), 2);
         assert_eq!(str_width("abc"), 3);
+    }
+
+    #[test]
+    fn highlight_spans_no_match() {
+        let style = Style::default();
+        let hl = Style::default().fg(ratatui::style::Color::Red);
+        let spans = highlight_spans("hello world", "xyz", style, hl);
+        assert_eq!(spans.len(), 1);
+        assert_eq!(spans[0].content.as_ref(), "hello world");
+    }
+
+    #[test]
+    fn highlight_spans_single_match() {
+        let style = Style::default();
+        let hl = Style::default().fg(ratatui::style::Color::Red);
+        let spans = highlight_spans("hello world", "world", style, hl);
+        assert_eq!(spans.len(), 2);
+        assert_eq!(spans[0].content.as_ref(), "hello ");
+        assert_eq!(spans[0].style, style);
+        assert_eq!(spans[1].content.as_ref(), "world");
+        assert_eq!(spans[1].style, hl);
+    }
+
+    #[test]
+    fn highlight_spans_multiple_matches() {
+        let style = Style::default();
+        let hl = Style::default().fg(ratatui::style::Color::Red);
+        let spans = highlight_spans("abcabc", "abc", style, hl);
+        assert_eq!(spans.len(), 2);
+        assert_eq!(spans[0].content.as_ref(), "abc");
+        assert_eq!(spans[0].style, hl);
+        assert_eq!(spans[1].content.as_ref(), "abc");
+        assert_eq!(spans[1].style, hl);
+    }
+
+    #[test]
+    fn highlight_spans_case_insensitive() {
+        let style = Style::default();
+        let hl = Style::default().fg(ratatui::style::Color::Red);
+        let spans = highlight_spans("Hello HELLO", "hello", style, hl);
+        // "Hello" (hl) + " " (normal) + "HELLO" (hl)
+        assert_eq!(spans.len(), 3);
+        assert_eq!(spans[0].content.as_ref(), "Hello");
+        assert_eq!(spans[0].style, hl);
+        assert_eq!(spans[1].content.as_ref(), " ");
+        assert_eq!(spans[1].style, style);
+        assert_eq!(spans[2].content.as_ref(), "HELLO");
+        assert_eq!(spans[2].style, hl);
+    }
+
+    #[test]
+    fn highlight_spans_empty_query() {
+        let style = Style::default();
+        let hl = Style::default().fg(ratatui::style::Color::Red);
+        let spans = highlight_spans("hello", "", style, hl);
+        assert_eq!(spans.len(), 1);
+        assert_eq!(spans[0].content.as_ref(), "hello");
+    }
+
+    #[test]
+    fn highlight_spans_multibyte_lowercase_length_change() {
+        // Turkish İ (U+0130, 2 bytes) lowercases to "i\u{307}" (3 bytes).
+        // This must not panic or produce wrong slicing.
+        let style = Style::default();
+        let hl = Style::default().fg(ratatui::style::Color::Red);
+        let spans = highlight_spans("İstanbul", "i\u{307}stanbul", style, hl);
+        assert_eq!(spans.len(), 1);
+        assert_eq!(spans[0].content.as_ref(), "İstanbul");
+        assert_eq!(spans[0].style, hl);
+    }
+
+    #[test]
+    fn highlight_spans_accented_chars() {
+        let style = Style::default();
+        let hl = Style::default().fg(ratatui::style::Color::Red);
+        let spans = highlight_spans("café latte", "café", style, hl);
+        assert_eq!(spans.len(), 2);
+        assert_eq!(spans[0].content.as_ref(), "café");
+        assert_eq!(spans[0].style, hl);
+        assert_eq!(spans[1].content.as_ref(), " latte");
     }
 }

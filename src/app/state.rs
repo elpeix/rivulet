@@ -11,7 +11,7 @@ use crate::ui::rich_text::LinkRegion;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InputMode {
     None,
-    Search,
+    PanelSearch,
     AddFeed,
     AddFeedGroup {
         url: String,
@@ -134,6 +134,11 @@ pub struct AppState {
     pub modal_selection: usize,
     feed_rows_dirty: bool,
     entry_id_to_index: HashMap<i64, usize>,
+    pub panel_search_focus: Option<Focus>,
+    pub feed_filter_query: Option<String>,
+    pub preview_search_query: Option<String>,
+    pub preview_match_lines: Vec<usize>,
+    pub preview_match_current: Option<usize>,
 }
 
 #[derive(Debug, Clone)]
@@ -193,6 +198,11 @@ impl Default for AppState {
             modal_selection: 0,
             feed_rows_dirty: false,
             entry_id_to_index: HashMap::new(),
+            panel_search_focus: None,
+            feed_filter_query: None,
+            preview_search_query: None,
+            preview_match_lines: Vec::new(),
+            preview_match_current: None,
         }
     }
 }
@@ -200,6 +210,32 @@ impl Default for AppState {
 impl AppState {
     pub fn entry_position(&self, id: i64) -> Option<usize> {
         self.entry_id_to_index.get(&id).copied()
+    }
+
+    /// Returns the appropriate refresh action based on the current view context.
+    /// - Entries panel with a single feed selected → RefreshFeed
+    /// - Entries panel viewing a group/ungrouped → RefreshFeedsByGroup
+    /// - Otherwise → RefreshFeeds (all)
+    pub fn contextual_refresh_action(&self) -> Action {
+        if self.focus == Focus::Entries {
+            if let Some(feed_id) = self.selected_feed {
+                return Action::RefreshFeed(feed_id);
+            }
+            if self.viewing_group {
+                if let Some(row_idx) = self.selected_feed_row_index {
+                    match self.feed_rows.get(row_idx) {
+                        Some(FeedRow::GroupHeader { group_id, .. }) => {
+                            return Action::RefreshFeedsByGroup(Some(*group_id));
+                        }
+                        Some(FeedRow::UngroupedHeader { .. }) => {
+                            return Action::RefreshFeedsByGroup(None);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+        Action::RefreshFeeds
     }
 
     fn rebuild_entry_index(&mut self) {
@@ -363,6 +399,8 @@ impl AppState {
             | Action::LoadAllEntries { .. }
             | Action::LoadEntriesForGroup { .. }
             | Action::RefreshFeeds
+            | Action::RefreshFeed(_)
+            | Action::RefreshFeedsByGroup(_)
             | Action::RefreshUnreadCounts
             | Action::AddFeed { .. }
             | Action::DeleteFeed(_)
@@ -422,6 +460,34 @@ impl AppState {
             let fi = *feed_index;
             self.select_feed_index(fi);
         }
+    }
+
+    /// Update preview search match state from computed match line indices.
+    /// Called during rendering because matches depend on the rendered body lines,
+    /// which are only available after layout and rich-text conversion.
+    pub fn update_preview_matches(&mut self, match_lines: Vec<usize>) {
+        self.preview_match_lines = match_lines;
+        if self.preview_match_lines.is_empty() {
+            self.preview_match_current = None;
+        } else if let Some(cur) = self.preview_match_current {
+            if cur >= self.preview_match_lines.len() {
+                self.preview_match_current = Some(0);
+                self.preview_scroll = self.preview_match_lines[0] as u16;
+            }
+        } else {
+            // First search: auto-select and scroll to first match
+            self.preview_match_current = Some(0);
+            self.preview_scroll = self.preview_match_lines[0] as u16;
+        }
+    }
+
+    /// Adjust the local unread count for a feed by `delta` (+1 or -1).
+    /// Updates both per-feed and total counters, then refreshes feed row display.
+    pub fn adjust_unread_count(&mut self, feed_id: i64, delta: i64) {
+        let count = self.unread_counts.entry(feed_id).or_insert(0);
+        *count = (*count + delta).max(0);
+        self.total_unread = (self.total_unread + delta).max(0);
+        self.update_feed_row_counts();
     }
 
     /// Update unread counters in existing feed rows without changing structure.
@@ -506,16 +572,28 @@ impl AppState {
 
         // Helper: should this feed be hidden?
         let hiding = self.hide_read_feeds;
+        let feed_query = self.feed_filter_query.as_deref().map(|q| q.to_lowercase());
         let feed_visible =
             |feed_index: usize, feeds: &[Feed], counts: &HashMap<i64, i64>| -> bool {
-                if !hiding {
-                    return true;
+                if hiding {
+                    let unread = feeds
+                        .get(feed_index)
+                        .and_then(|f| counts.get(&f.id).copied())
+                        .unwrap_or(0);
+                    if unread == 0 {
+                        return false;
+                    }
                 }
-                let unread = feeds
-                    .get(feed_index)
-                    .and_then(|f| counts.get(&f.id).copied())
-                    .unwrap_or(0);
-                unread > 0
+                if let Some(ref q) = feed_query {
+                    let title = feeds
+                        .get(feed_index)
+                        .and_then(|f| f.display_title())
+                        .unwrap_or("");
+                    if !title.to_lowercase().contains(q) {
+                        return false;
+                    }
+                }
+                true
             };
 
         if self.groups.is_empty() {
@@ -974,5 +1052,184 @@ mod tests {
         assert_eq!(state.search_query.as_deref(), Some("hello"));
         state.reduce(Action::SetSearchQuery("   ".to_string()));
         assert!(state.search_query.is_none());
+    }
+
+    #[test]
+    fn feed_filter_query_filters_rows() {
+        let mut state = AppState::default();
+        let feeds = vec![
+            sample_feed(1, "Rust Blog", None),
+            sample_feed(2, "Go Weekly", None),
+            sample_feed(3, "Rust News", None),
+        ];
+        state.reduce(Action::FeedsLoaded(feeds));
+        state.flush_feed_rows();
+        assert_eq!(state.feed_rows.len(), 4); // All + 3 feeds
+
+        state.feed_filter_query = Some("rust".to_string());
+        state.rebuild_feed_rows();
+        // All + Rust Blog + Rust News = 3
+        assert_eq!(state.feed_rows.len(), 3);
+        assert!(matches!(state.feed_rows[0], FeedRow::AllFeeds));
+        assert!(matches!(
+            state.feed_rows[1],
+            FeedRow::FeedItem { feed_index: 0 }
+        ));
+        assert!(matches!(
+            state.feed_rows[2],
+            FeedRow::FeedItem { feed_index: 2 }
+        ));
+
+        // Clear filter restores all
+        state.feed_filter_query = None;
+        state.rebuild_feed_rows();
+        assert_eq!(state.feed_rows.len(), 4);
+    }
+
+    #[test]
+    fn feed_filter_query_case_insensitive() {
+        let mut state = AppState::default();
+        state.reduce(Action::FeedsLoaded(vec![sample_feed(1, "RUST Blog", None)]));
+        state.flush_feed_rows();
+
+        state.feed_filter_query = Some("rust".to_string());
+        state.rebuild_feed_rows();
+        assert_eq!(state.feed_rows.len(), 2); // All + matching feed
+    }
+
+    #[test]
+    fn adjust_unread_count_increments() {
+        let mut state = AppState::default();
+        state.total_unread = 5;
+        state.unread_counts.insert(1, 3);
+
+        state.adjust_unread_count(1, -1);
+        assert_eq!(state.unread_counts[&1], 2);
+        assert_eq!(state.total_unread, 4);
+
+        state.adjust_unread_count(1, 1);
+        assert_eq!(state.unread_counts[&1], 3);
+        assert_eq!(state.total_unread, 5);
+    }
+
+    #[test]
+    fn adjust_unread_count_floors_at_zero() {
+        let mut state = AppState::default();
+        state.total_unread = 0;
+        state.unread_counts.insert(1, 0);
+
+        state.adjust_unread_count(1, -1);
+        assert_eq!(state.unread_counts[&1], 0);
+        assert_eq!(state.total_unread, 0);
+    }
+
+    #[test]
+    fn adjust_unread_count_creates_entry() {
+        let mut state = AppState::default();
+        state.total_unread = 0;
+        assert!(!state.unread_counts.contains_key(&42));
+
+        state.adjust_unread_count(42, 1);
+        assert_eq!(state.unread_counts[&42], 1);
+        assert_eq!(state.total_unread, 1);
+    }
+
+    #[test]
+    fn update_preview_matches_auto_scrolls_to_first() {
+        let mut state = AppState::default();
+        state.preview_scroll = 50;
+        state.preview_match_current = None;
+
+        state.update_preview_matches(vec![10, 30, 60]);
+        assert_eq!(state.preview_match_current, Some(0));
+        assert_eq!(state.preview_scroll, 10);
+    }
+
+    #[test]
+    fn update_preview_matches_clamps_out_of_bounds() {
+        let mut state = AppState::default();
+        state.preview_match_current = Some(5);
+
+        state.update_preview_matches(vec![3, 7]);
+        assert_eq!(state.preview_match_current, Some(0));
+        assert_eq!(state.preview_scroll, 3);
+    }
+
+    #[test]
+    fn update_preview_matches_empty_clears() {
+        let mut state = AppState::default();
+        state.preview_match_current = Some(2);
+
+        state.update_preview_matches(Vec::new());
+        assert_eq!(state.preview_match_current, None);
+    }
+
+    #[test]
+    fn contextual_refresh_entries_with_feed_returns_refresh_feed() {
+        let mut state = AppState::default();
+        state.focus = Focus::Entries;
+        state.selected_feed = Some(42);
+        assert!(matches!(
+            state.contextual_refresh_action(),
+            Action::RefreshFeed(42)
+        ));
+    }
+
+    #[test]
+    fn contextual_refresh_entries_group_header_returns_refresh_by_group() {
+        let mut state = AppState::default();
+        state.focus = Focus::Entries;
+        state.selected_feed = None;
+        state.viewing_group = true;
+        state.feed_rows = vec![
+            FeedRow::AllFeeds,
+            FeedRow::GroupHeader {
+                group_id: 10,
+                name: "Tech".to_string(),
+                unread: 0,
+            },
+        ];
+        state.selected_feed_row_index = Some(1);
+        assert!(matches!(
+            state.contextual_refresh_action(),
+            Action::RefreshFeedsByGroup(Some(10))
+        ));
+    }
+
+    #[test]
+    fn contextual_refresh_entries_ungrouped_header_returns_refresh_none_group() {
+        let mut state = AppState::default();
+        state.focus = Focus::Entries;
+        state.selected_feed = None;
+        state.viewing_group = true;
+        state.feed_rows = vec![FeedRow::AllFeeds, FeedRow::UngroupedHeader { unread: 0 }];
+        state.selected_feed_row_index = Some(1);
+        assert!(matches!(
+            state.contextual_refresh_action(),
+            Action::RefreshFeedsByGroup(None)
+        ));
+    }
+
+    #[test]
+    fn contextual_refresh_feeds_panel_returns_refresh_all() {
+        let mut state = AppState::default();
+        state.focus = Focus::Feeds;
+        state.selected_feed = Some(42);
+        assert!(matches!(
+            state.contextual_refresh_action(),
+            Action::RefreshFeeds
+        ));
+    }
+
+    #[test]
+    fn contextual_refresh_entries_no_feed_no_group_returns_refresh_all() {
+        let mut state = AppState::default();
+        state.focus = Focus::Entries;
+        state.selected_feed = None;
+        state.viewing_group = false;
+        assert!(matches!(
+            state.contextual_refresh_action(),
+            Action::RefreshFeeds
+        ));
     }
 }

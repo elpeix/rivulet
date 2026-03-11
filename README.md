@@ -11,7 +11,8 @@ A terminal RSS reader built with Rust and [ratatui](https://github.com/ratatui-o
 - **Dual layout** — 3-column (Feeds | Entries | Preview) or 2-column split mode, toggle with `w`
 - **Feed categories** — Group feeds by topic with collapsible sections
 - **Rich HTML preview** — Bold, italic, links, code blocks, lists
-- **Smart filtering** — Unread, saved, configurable time filter, hide read feeds, incremental search
+- **Panel search** — Context-aware `/` search: filter feeds by name, search entries in DB, highlight matches in preview with `n`/`N` navigation
+- **Smart filtering** — Unread, saved, configurable time filter, hide read feeds
 - **Multi-select** — Select multiple entries with Space, then bulk mark read or save
 - **Entry sorting** — By date (newest/oldest first) or title A-Z
 - **Mouse support** — Click to select, scroll to navigate
@@ -45,7 +46,7 @@ Requires Rust 2024 edition (1.85+).
 rivulet
 ```
 
-Press `a` to add a feed. You can paste either a direct feed URL or a website URL — Rivulet will auto-discover the feed. Press `r` to refresh.
+Press `a` to add a feed. You can paste either a direct feed URL or a website URL — Rivulet will auto-discover the feed. Press `r` to refresh all feeds.
 
 ### OPML import/export
 
@@ -97,7 +98,9 @@ Categories are preserved during import and export.
 | `m` | Toggle read/unread |
 | `M` | Mark all visible as read |
 | `s` | Save for later |
-| `/` | Search |
+| `r` | Refresh selected feed |
+| `/` | Search (contextual: feeds / entries / preview) |
+| `n` / `N` | Next / previous search match (preview) |
 | `o` | Open in browser |
 | `Tab` / `Shift+Tab` | Next / previous link in preview |
 | **General** | |

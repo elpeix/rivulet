@@ -133,7 +133,8 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
             Focus::Preview => {}
         },
         KeyCode::Char('r') => {
-            let _ = app.dispatch(Action::RefreshFeeds);
+            let action = app.state.contextual_refresh_action();
+            let _ = app.dispatch(action);
         }
         KeyCode::Char('f') => {
             let _ = app.dispatch(Action::ToggleUnreadFilter);
@@ -168,7 +169,6 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
             if !app.state.selected_entries.is_empty() {
                 let ids: Vec<i64> = app.state.selected_entries.iter().copied().collect();
                 let timestamp = now_timestamp();
-                // If any selected entry is unread, mark all as read; otherwise mark all as unread
                 let any_unread = ids.iter().any(|id| {
                     app.state
                         .entry_position(*id)
@@ -179,7 +179,9 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
                     for &id in &ids {
                         if let Some(idx) = app.state.entry_position(id) {
                             if app.state.entries[idx].read_at.is_none() {
+                                let feed_id = app.state.entries[idx].feed_id;
                                 app.state.entries[idx].read_at = Some(timestamp);
+                                app.state.adjust_unread_count(feed_id, -1);
                             }
                         }
                     }
@@ -187,25 +189,27 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
                 } else {
                     for &id in &ids {
                         if let Some(idx) = app.state.entry_position(id) {
+                            let feed_id = app.state.entries[idx].feed_id;
                             app.state.entries[idx].read_at = None;
+                            app.state.adjust_unread_count(feed_id, 1);
                         }
                     }
                     let _ = app.dispatch(Action::MarkAllUnread(ids));
                 }
                 app.state.selected_entries.clear();
-                let _ = app.dispatch(Action::RefreshUnreadCounts);
             } else if let Some(entry_id) = app.state.selected_entry {
                 if let Some(idx) = app.state.entry_position(entry_id) {
+                    let feed_id = app.state.entries[idx].feed_id;
                     if app.state.entries[idx].read_at.is_none() {
-                        let timestamp = now_timestamp();
-                        app.state.entries[idx].read_at = Some(timestamp);
+                        app.state.entries[idx].read_at = Some(now_timestamp());
                         let _ = app.dispatch(Action::MarkRead(entry_id));
+                        app.state.adjust_unread_count(feed_id, -1);
                     } else {
                         app.state.entries[idx].read_at = None;
                         let _ = app.dispatch(Action::MarkUnread(entry_id));
+                        app.state.adjust_unread_count(feed_id, 1);
                     }
                 }
-                let _ = app.dispatch(Action::RefreshUnreadCounts);
             }
         }
         KeyCode::Char('M') => {
@@ -223,8 +227,18 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
                         entry.read_at = Some(timestamp);
                     }
                 }
+                // Adjust counts once per feed instead of per entry
+                let mut deltas: std::collections::HashMap<i64, i64> =
+                    std::collections::HashMap::new();
+                for id in &unread_ids {
+                    if let Some(idx) = app.state.entry_position(*id) {
+                        *deltas.entry(app.state.entries[idx].feed_id).or_default() += 1;
+                    }
+                }
+                for (feed_id, count) in deltas {
+                    app.state.adjust_unread_count(feed_id, -count);
+                }
                 let _ = app.dispatch(Action::MarkAllRead(unread_ids));
-                let _ = app.dispatch(Action::RefreshUnreadCounts);
             }
         }
         KeyCode::Char('S') => {
@@ -252,6 +266,30 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
                     }
                     let _ = app.dispatch(Action::RefreshUnreadCounts);
                     dispatch_load_entries(app);
+                }
+            }
+        }
+        KeyCode::Char('n') => {
+            if app.state.focus == Focus::Preview && !app.state.preview_match_lines.is_empty() {
+                let next = match app.state.preview_match_current {
+                    Some(i) if i + 1 < app.state.preview_match_lines.len() => i + 1,
+                    _ => 0,
+                };
+                app.state.preview_match_current = Some(next);
+                if let Some(&line) = app.state.preview_match_lines.get(next) {
+                    app.state.preview_scroll = line as u16;
+                }
+            }
+        }
+        KeyCode::Char('N') => {
+            if app.state.focus == Focus::Preview && !app.state.preview_match_lines.is_empty() {
+                let prev = match app.state.preview_match_current {
+                    Some(0) | None => app.state.preview_match_lines.len() - 1,
+                    Some(i) => i - 1,
+                };
+                app.state.preview_match_current = Some(prev);
+                if let Some(&line) = app.state.preview_match_lines.get(prev) {
+                    app.state.preview_scroll = line as u16;
                 }
             }
         }
@@ -303,9 +341,9 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
             }
         }
         KeyCode::Char('/') => {
-            app.state.input_mode = InputMode::Search;
+            app.state.input_mode = InputMode::PanelSearch;
             app.state.input_buffer.clear();
-            let _ = app.dispatch(Action::SetStatus(app.lang.search_prompt.to_string()));
+            app.state.panel_search_focus = Some(app.state.focus);
         }
         KeyCode::Char('a') => {
             app.state.input_mode = InputMode::AddFeed;
@@ -353,25 +391,48 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
                 let _ = app.dispatch(Action::SetStatus(app.lang.no_feed_selected.to_string()));
             }
         }
-        KeyCode::Esc => match app.state.focus {
-            Focus::Preview => {
-                if app.state.selected_link_index.is_some() {
-                    app.state.selected_link_index = None;
-                } else {
-                    let _ = app.dispatch(Action::FocusEntries);
+        KeyCode::Esc => {
+            // Clear the search active on the current panel, if any
+            let cleared = match app.state.focus {
+                Focus::Feeds if app.state.feed_filter_query.is_some() => {
+                    app.state.feed_filter_query = None;
+                    app.state.rebuild_feed_rows();
+                    true
+                }
+                Focus::Entries if app.state.search_query.is_some() => {
+                    let _ = app.dispatch(Action::SetSearchQuery(String::new()));
+                    true
+                }
+                Focus::Preview if app.state.preview_search_query.is_some() => {
+                    app.state.preview_search_query = None;
+                    app.state.preview_match_lines.clear();
+                    app.state.preview_match_current = None;
+                    true
+                }
+                _ => false,
+            };
+            if !cleared {
+                match app.state.focus {
+                    Focus::Preview => {
+                        if app.state.selected_link_index.is_some() {
+                            app.state.selected_link_index = None;
+                        } else {
+                            let _ = app.dispatch(Action::FocusEntries);
+                        }
+                    }
+                    Focus::Entries => {
+                        if !app.state.selected_entries.is_empty() {
+                            app.state.selected_entries.clear();
+                        } else {
+                            let _ = app.dispatch(Action::FocusFeeds);
+                        }
+                    }
+                    Focus::Feeds => {
+                        let _ = app.dispatch(Action::ClearStatus);
+                    }
                 }
             }
-            Focus::Entries => {
-                if !app.state.selected_entries.is_empty() {
-                    app.state.selected_entries.clear();
-                } else {
-                    let _ = app.dispatch(Action::FocusFeeds);
-                }
-            }
-            Focus::Feeds => {
-                let _ = app.dispatch(Action::ClearStatus);
-            }
-        },
+        }
         _ => {}
     }
 
@@ -432,7 +493,7 @@ mod tests {
     fn slash_enters_search_mode() {
         let mut app = test_app();
         handle_key(&mut app, key(KeyCode::Char('/')));
-        assert_eq!(app.state.input_mode, InputMode::Search);
+        assert_eq!(app.state.input_mode, InputMode::PanelSearch);
     }
 
     #[test]
@@ -638,6 +699,142 @@ mod tests {
         app.state
             .reduce(Action::EntriesLoaded(vec![sample_entry(20)]));
         assert!(app.state.selected_entries.is_empty());
+    }
+
+    #[test]
+    fn slash_sets_panel_search_focus_to_current_panel() {
+        let mut app = test_app();
+        app.state.focus = Focus::Feeds;
+        handle_key(&mut app, key(KeyCode::Char('/')));
+        assert_eq!(app.state.input_mode, InputMode::PanelSearch);
+        assert_eq!(app.state.panel_search_focus, Some(Focus::Feeds));
+
+        app.state.input_mode = InputMode::None;
+        app.state.focus = Focus::Entries;
+        handle_key(&mut app, key(KeyCode::Char('/')));
+        assert_eq!(app.state.panel_search_focus, Some(Focus::Entries));
+
+        app.state.input_mode = InputMode::None;
+        app.state.focus = Focus::Preview;
+        handle_key(&mut app, key(KeyCode::Char('/')));
+        assert_eq!(app.state.panel_search_focus, Some(Focus::Preview));
+    }
+
+    #[test]
+    fn slash_clears_input_buffer() {
+        let mut app = test_app();
+        app.state.input_buffer = "old query".to_string();
+        handle_key(&mut app, key(KeyCode::Char('/')));
+        assert!(app.state.input_buffer.is_empty());
+    }
+
+    #[test]
+    fn n_navigates_preview_matches_forward() {
+        let mut app = test_app();
+        app.state.focus = Focus::Preview;
+        app.state.preview_match_lines = vec![5, 15, 25];
+        app.state.preview_match_current = None;
+
+        handle_key(&mut app, key(KeyCode::Char('n')));
+        assert_eq!(app.state.preview_match_current, Some(0));
+        assert_eq!(app.state.preview_scroll, 5);
+
+        handle_key(&mut app, key(KeyCode::Char('n')));
+        assert_eq!(app.state.preview_match_current, Some(1));
+        assert_eq!(app.state.preview_scroll, 15);
+
+        handle_key(&mut app, key(KeyCode::Char('n')));
+        assert_eq!(app.state.preview_match_current, Some(2));
+        assert_eq!(app.state.preview_scroll, 25);
+
+        // Wraps around
+        handle_key(&mut app, key(KeyCode::Char('n')));
+        assert_eq!(app.state.preview_match_current, Some(0));
+        assert_eq!(app.state.preview_scroll, 5);
+    }
+
+    #[test]
+    fn n_reverse_navigates_preview_matches() {
+        let mut app = test_app();
+        app.state.focus = Focus::Preview;
+        app.state.preview_match_lines = vec![5, 15, 25];
+        app.state.preview_match_current = None;
+
+        // N from None goes to last match
+        handle_key(&mut app, key(KeyCode::Char('N')));
+        assert_eq!(app.state.preview_match_current, Some(2));
+        assert_eq!(app.state.preview_scroll, 25);
+
+        handle_key(&mut app, key(KeyCode::Char('N')));
+        assert_eq!(app.state.preview_match_current, Some(1));
+        assert_eq!(app.state.preview_scroll, 15);
+    }
+
+    #[test]
+    fn n_noop_without_matches() {
+        let mut app = test_app();
+        app.state.focus = Focus::Preview;
+        app.state.preview_match_lines = vec![];
+        handle_key(&mut app, key(KeyCode::Char('n')));
+        assert_eq!(app.state.preview_match_current, None);
+    }
+
+    #[test]
+    fn n_noop_outside_preview() {
+        let mut app = test_app();
+        app.state.focus = Focus::Entries;
+        app.state.preview_match_lines = vec![5, 15];
+        handle_key(&mut app, key(KeyCode::Char('n')));
+        assert_eq!(app.state.preview_match_current, None);
+    }
+
+    #[test]
+    fn esc_clears_feed_filter_search() {
+        let mut app = test_app();
+        app.state.feed_filter_query = Some("rust".to_string());
+        app.state.focus = Focus::Feeds;
+        handle_key(&mut app, key(KeyCode::Esc));
+        assert!(app.state.feed_filter_query.is_none());
+    }
+
+    #[test]
+    fn esc_clears_preview_search() {
+        let mut app = test_app();
+        app.state.preview_search_query = Some("test".to_string());
+        app.state.preview_match_lines = vec![1, 5, 10];
+        app.state.preview_match_current = Some(1);
+        app.state.focus = Focus::Preview;
+        handle_key(&mut app, key(KeyCode::Esc));
+        assert!(app.state.preview_search_query.is_none());
+        assert!(app.state.preview_match_lines.is_empty());
+        assert!(app.state.preview_match_current.is_none());
+    }
+
+    #[test]
+    fn esc_only_clears_search_of_current_panel() {
+        let mut app = test_app();
+        app.state.feed_filter_query = Some("query".to_string());
+        app.state.preview_search_query = Some("test".to_string());
+        app.state.focus = Focus::Preview;
+        // Esc on Preview clears preview search only, not feed filter
+        handle_key(&mut app, key(KeyCode::Esc));
+        assert!(app.state.preview_search_query.is_none());
+        assert_eq!(app.state.feed_filter_query.as_deref(), Some("query"));
+        assert_eq!(app.state.focus, Focus::Preview); // still on Preview
+    }
+
+    #[test]
+    fn esc_navigates_when_no_search_active_on_panel() {
+        let mut app = test_app();
+        // Feed filter active but we're on Preview with no preview search
+        app.state.feed_filter_query = Some("query".to_string());
+        app.state.focus = Focus::Preview;
+        app.state.preview_search_query = None;
+        handle_key(&mut app, key(KeyCode::Esc));
+        // No preview search to clear → navigates back to Entries
+        assert_eq!(app.state.focus, Focus::Entries);
+        // Feed filter stays untouched
+        assert_eq!(app.state.feed_filter_query.as_deref(), Some("query"));
     }
 }
 

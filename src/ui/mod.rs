@@ -97,6 +97,10 @@ fn draw_feeds_panel(
     let mut feed_state = ListState::default();
     feed_state.select(state.selected_feed_row_index);
     let focused = state.focus == crate::app::state::Focus::Feeds;
+    let searching = state.input_mode == crate::app::state::InputMode::PanelSearch
+        && state.panel_search_focus == Some(crate::app::state::Focus::Feeds);
+    let has_filter = state.feed_filter_query.is_some();
+    let search_height = if searching || has_filter { 1 } else { 0 };
     let block = panel_block(theme, focused, Some(theme.feeds_bg));
     let inner = block.inner(area);
     frame.render_widget(block, area);
@@ -106,6 +110,7 @@ fn draw_feeds_panel(
             Constraint::Length(1),
             Constraint::Length(1),
             Constraint::Min(1),
+            Constraint::Length(search_height),
         ])
         .split(inner);
     frame.render_widget(
@@ -118,6 +123,10 @@ fn draw_feeds_panel(
     render_separator(frame, theme, split[1]);
     let feeds = feeds_list(state, theme, split[2].width, lang);
     frame.render_stateful_widget(feeds, split[2], &mut feed_state);
+    if searching || has_filter {
+        let query = state.feed_filter_query.as_deref().unwrap_or("");
+        render_search_bar(frame, theme, split[3], query, searching, None);
+    }
 }
 
 fn draw_entries_panel(
@@ -130,6 +139,10 @@ fn draw_entries_panel(
     let mut entry_state = ListState::default();
     entry_state.select(state.selected_entry_index);
     let focused = state.focus == crate::app::state::Focus::Entries;
+    let searching = state.input_mode == crate::app::state::InputMode::PanelSearch
+        && state.panel_search_focus == Some(crate::app::state::Focus::Entries);
+    let has_filter = state.search_query.is_some();
+    let search_height = if searching || has_filter { 1 } else { 0 };
     let block = panel_block(theme, focused, None);
     let inner = block.inner(area);
     frame.render_widget(block, area);
@@ -139,6 +152,7 @@ fn draw_entries_panel(
             Constraint::Length(1),
             Constraint::Length(1),
             Constraint::Min(1),
+            Constraint::Length(search_height),
         ])
         .split(inner);
 
@@ -178,6 +192,7 @@ fn draw_entries_panel(
         entry_width,
         lang,
         &state.selected_entries,
+        state.search_query.as_deref(),
     );
     frame.render_stateful_widget(entries, list_area, &mut entry_state);
 
@@ -196,6 +211,10 @@ fn draw_entries_panel(
             &mut scrollbar_state,
         );
     }
+    if searching || has_filter {
+        let query = state.search_query.as_deref().unwrap_or("");
+        render_search_bar(frame, theme, split[3], query, searching, None);
+    }
 }
 
 fn draw_preview_panel(
@@ -206,6 +225,10 @@ fn draw_preview_panel(
     lang: &Lang,
 ) {
     let focused = state.focus == crate::app::state::Focus::Preview;
+    let searching = state.input_mode == crate::app::state::InputMode::PanelSearch
+        && state.panel_search_focus == Some(crate::app::state::Focus::Preview);
+    let has_filter = state.preview_search_query.is_some();
+    let search_height = if searching || has_filter { 1 } else { 0 };
     let block = preview_block(theme, focused);
     let inner = block.inner(area);
     frame.render_widget(block, area);
@@ -215,6 +238,7 @@ fn draw_preview_panel(
             Constraint::Length(1),
             Constraint::Length(1),
             Constraint::Min(1),
+            Constraint::Length(search_height),
         ])
         .split(inner);
     let preview_inner = split[2];
@@ -229,13 +253,14 @@ fn draw_preview_panel(
         lang,
         selected_link_url.as_deref(),
     );
-    state.preview_content_len = parts.body_len;
+    let body_len = parts.body_len;
+    state.preview_content_len = body_len;
     state.preview_links = parts.links;
     state.preview_link_regions = parts.link_regions;
     let visible_height = preview_inner.height as usize;
-    let preview_title = if parts.body_len > visible_height {
+    let preview_title = if body_len > visible_height {
         let current_line = state.preview_scroll as usize + 1;
-        lang.preview_panel_title(current_line, parts.body_len)
+        lang.preview_panel_title(current_line, body_len)
     } else {
         lang.preview.to_string()
     };
@@ -265,7 +290,24 @@ fn draw_preview_panel(
     frame.render_widget(Paragraph::new(parts.meta), content_split[1]);
     frame.render_widget(Paragraph::new(""), content_split[2]);
     state.preview_body_area = content_split[3];
-    let body_text = Text::from(parts.body_lines);
+
+    let mut body_lines = parts.body_lines;
+    let highlight_style = Style::default().fg(theme.highlight_fg).bg(theme.accent);
+    let active_style = Style::default().fg(theme.highlight_fg).bg(theme.accent_alt);
+    if let Some(ref q) = state.preview_search_query {
+        let matches = rich_text::highlight_search(
+            &mut body_lines,
+            q,
+            highlight_style,
+            active_style,
+            state.preview_match_current,
+        );
+        state.update_preview_matches(matches);
+    } else {
+        state.update_preview_matches(Vec::new());
+    }
+
+    let body_text = Text::from(body_lines);
     frame.render_widget(
         Paragraph::new(body_text)
             .wrap(Wrap { trim: false })
@@ -273,15 +315,28 @@ fn draw_preview_panel(
         content_split[3],
     );
 
-    if parts.body_len > content_split[3].height as usize {
+    if body_len > content_split[3].height as usize {
         let scrollbar_area = scrollbar_rect(content_split[3]);
         let mut scrollbar_state =
-            ScrollbarState::new(parts.body_len).position(state.preview_scroll as usize);
+            ScrollbarState::new(body_len).position(state.preview_scroll as usize);
         frame.render_stateful_widget(
             Scrollbar::new(ScrollbarOrientation::VerticalRight),
             scrollbar_area,
             &mut scrollbar_state,
         );
+    }
+
+    if searching || has_filter {
+        let query = state.preview_search_query.as_deref().unwrap_or("");
+        let match_info = if !state.preview_match_lines.is_empty() {
+            let cur = state.preview_match_current.map(|i| i + 1).unwrap_or(0);
+            Some((cur, state.preview_match_lines.len()))
+        } else if !query.is_empty() {
+            Some((0, 0))
+        } else {
+            None
+        };
+        render_search_bar(frame, theme, split[3], query, searching, match_info);
     }
 }
 
@@ -501,12 +556,13 @@ fn draw_help_modal(frame: &mut Frame<'_>, theme: &Theme, area: Rect, scroll: u16
             &lang.help_toggle_read,
         ),
         row("M", &lang.help_mark_all_read, "s", &lang.help_save_later),
-        row("/", &lang.help_search, "o", &lang.help_open_browser),
+        row("/", &lang.help_search, "n / N", &lang.help_search_next),
+        row("o", &lang.help_open_browser, "Tab", &lang.help_next_link),
         row(
-            "Tab",
-            &lang.help_next_link,
             "Shift-Tab",
             &lang.help_prev_link,
+            "r",
+            &lang.help_refresh_feed,
         ),
         Line::from(""),
         heading(&lang.help_general),
@@ -550,4 +606,28 @@ fn scrollbar_rect(area: Rect) -> Rect {
         width: 1,
         height: area.height,
     }
+}
+
+fn render_search_bar(
+    frame: &mut Frame<'_>,
+    theme: &Theme,
+    area: Rect,
+    query: &str,
+    is_typing: bool,
+    match_info: Option<(usize, usize)>,
+) {
+    let mut spans = vec![Span::styled("/", Style::default().fg(theme.accent))];
+    spans.push(Span::raw(query.to_string()));
+    if is_typing {
+        spans.push(Span::styled("_", theme.highlight_style()));
+    }
+    if let Some((current, total)) = match_info {
+        let info = if total == 0 {
+            " [0]".to_string()
+        } else {
+            format!(" [{}/{}]", current, total)
+        };
+        spans.push(Span::styled(info, Style::default().fg(theme.dim)));
+    }
+    frame.render_widget(Paragraph::new(Line::from(spans)), area);
 }

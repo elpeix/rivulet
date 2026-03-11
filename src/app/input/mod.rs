@@ -12,7 +12,12 @@ use crate::app::state::FeedRow;
 
 /// Reload entries based on the currently selected feed row.
 /// Shared helper that eliminates duplication between reload and navigation.
+/// Clears the active search query since we're switching context.
 pub(crate) fn dispatch_load_entries(app: &mut App) {
+    app.state.search_query = None;
+    app.state.preview_search_query = None;
+    app.state.preview_match_lines.clear();
+    app.state.preview_match_current = None;
     if let Some(row_idx) = app.state.selected_feed_row_index {
         if let Some(row) = app.state.feed_rows.get(row_idx) {
             match row {

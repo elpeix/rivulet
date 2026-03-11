@@ -2,7 +2,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::app::App;
 use crate::app::actions::Action;
-use crate::app::state::{AppState, InputMode};
+use crate::app::state::{AppState, Focus, InputMode};
 use crate::i18n::Lang;
 use crate::ui;
 
@@ -79,8 +79,23 @@ pub fn handle_input_mode(app: &mut App, key: KeyEvent) -> bool {
 
     match key.code {
         KeyCode::Esc => {
-            if mode == InputMode::Search {
-                let _ = app.dispatch(Action::SetSearchQuery(String::new()));
+            if mode == InputMode::PanelSearch {
+                match app.state.panel_search_focus {
+                    Some(Focus::Feeds) => {
+                        app.state.feed_filter_query = None;
+                        app.state.rebuild_feed_rows();
+                    }
+                    Some(Focus::Entries) => {
+                        let _ = app.dispatch(Action::SetSearchQuery(String::new()));
+                    }
+                    Some(Focus::Preview) => {
+                        app.state.preview_search_query = None;
+                        app.state.preview_match_lines.clear();
+                        app.state.preview_match_current = None;
+                    }
+                    None => {}
+                }
+                app.state.panel_search_focus = None;
             }
             let _ = app.dispatch(Action::ClearStatus);
             return true;
@@ -99,8 +114,9 @@ pub fn handle_input_mode(app: &mut App, key: KeyEvent) -> bool {
         KeyCode::Enter => {
             let value = app.state.input_buffer.trim().to_string();
             match &mode {
-                InputMode::Search => {
-                    // Already applied incrementally, just close modal
+                InputMode::PanelSearch => {
+                    // Keep filter active, just close the search bar
+                    app.state.panel_search_focus = None;
                 }
                 InputMode::RenameFeed => {
                     if let Some(feed_id) = app.state.selected_feed {
@@ -148,11 +164,25 @@ pub fn handle_input_mode(app: &mut App, key: KeyEvent) -> bool {
     }
 
     match &mode {
-        InputMode::Search => {
-            let prompt = format!("{}{}", app.lang.search_prompt, app.state.input_buffer);
-            let _ = app.dispatch(Action::SetStatus(prompt));
+        InputMode::PanelSearch => {
             let query = app.state.input_buffer.trim().to_string();
-            let _ = app.dispatch(Action::SetSearchQuery(query));
+            match app.state.panel_search_focus {
+                Some(Focus::Feeds) => {
+                    app.state.feed_filter_query = if query.is_empty() { None } else { Some(query) };
+                    app.state.rebuild_feed_rows();
+                }
+                Some(Focus::Entries) => {
+                    let _ = app.dispatch(Action::SetSearchQuery(query));
+                }
+                Some(Focus::Preview) => {
+                    let new_query = if query.is_empty() { None } else { Some(query) };
+                    if app.state.preview_search_query != new_query {
+                        app.state.preview_match_current = None;
+                    }
+                    app.state.preview_search_query = new_query;
+                }
+                None => {}
+            }
         }
         InputMode::AddFeed => {
             let prompt = format!("{}{}", app.lang.add_feed_prompt, app.state.input_buffer);
@@ -447,12 +477,7 @@ pub fn current_modal(state: &AppState, lang: &Lang) -> Option<ui::Modal> {
     }
 
     match &state.input_mode {
-        InputMode::Search => Some(ui::Modal::Input {
-            title: lang.search_title.to_string(),
-            prompt: lang.query_label.to_string(),
-            value: state.input_buffer.clone(),
-            hint: None,
-        }),
+        InputMode::PanelSearch => None, // Rendered inline, not as modal
         InputMode::RenameFeed => Some(ui::Modal::Input {
             title: lang.rename_feed_title.to_string(),
             prompt: lang.name_label.to_string(),
@@ -544,7 +569,7 @@ mod tests {
     #[test]
     fn search_esc_cancels() {
         let mut app = test_app();
-        app.state.input_mode = InputMode::Search;
+        app.state.input_mode = InputMode::PanelSearch;
         app.state.input_buffer = "test".to_string();
         let closed = handle_input_mode(&mut app, key(KeyCode::Esc));
         assert!(closed);
@@ -553,7 +578,7 @@ mod tests {
     #[test]
     fn search_typing_updates_buffer() {
         let mut app = test_app();
-        app.state.input_mode = InputMode::Search;
+        app.state.input_mode = InputMode::PanelSearch;
         app.state.input_buffer.clear();
 
         handle_input_mode(&mut app, key(KeyCode::Char('h')));
@@ -564,7 +589,7 @@ mod tests {
     #[test]
     fn search_backspace_removes_char() {
         let mut app = test_app();
-        app.state.input_mode = InputMode::Search;
+        app.state.input_mode = InputMode::PanelSearch;
         app.state.input_buffer = "abc".to_string();
 
         handle_input_mode(&mut app, key(KeyCode::Backspace));
@@ -674,5 +699,92 @@ mod tests {
         app.state.modal_selection = 99; // way out of range
         let closed = handle_input_mode(&mut app, key(KeyCode::Enter));
         assert!(closed); // should handle gracefully
+    }
+
+    #[test]
+    fn panel_search_esc_clears_feed_filter() {
+        let mut app = test_app();
+        app.state.input_mode = InputMode::PanelSearch;
+        app.state.panel_search_focus = Some(Focus::Feeds);
+        app.state.feed_filter_query = Some("rust".to_string());
+        let closed = handle_input_mode(&mut app, key(KeyCode::Esc));
+        assert!(closed);
+        assert!(app.state.feed_filter_query.is_none());
+        assert!(app.state.panel_search_focus.is_none());
+    }
+
+    #[test]
+    fn panel_search_esc_clears_preview_search() {
+        let mut app = test_app();
+        app.state.input_mode = InputMode::PanelSearch;
+        app.state.panel_search_focus = Some(Focus::Preview);
+        app.state.preview_search_query = Some("test".to_string());
+        app.state.preview_match_lines = vec![1, 5];
+        app.state.preview_match_current = Some(0);
+
+        let closed = handle_input_mode(&mut app, key(KeyCode::Esc));
+        assert!(closed);
+        assert!(app.state.preview_search_query.is_none());
+        assert!(app.state.preview_match_lines.is_empty());
+        assert!(app.state.preview_match_current.is_none());
+    }
+
+    #[test]
+    fn panel_search_enter_keeps_filter_active() {
+        let mut app = test_app();
+        app.state.input_mode = InputMode::PanelSearch;
+        app.state.panel_search_focus = Some(Focus::Feeds);
+        app.state.feed_filter_query = Some("rust".to_string());
+        app.state.input_buffer = "rust".to_string();
+
+        let closed = handle_input_mode(&mut app, key(KeyCode::Enter));
+        assert!(closed);
+        // Filter stays active, only search bar closes
+        assert_eq!(app.state.feed_filter_query.as_deref(), Some("rust"));
+        assert!(app.state.panel_search_focus.is_none());
+    }
+
+    #[test]
+    fn panel_search_typing_updates_feed_filter() {
+        let mut app = test_app();
+        app.state.input_mode = InputMode::PanelSearch;
+        app.state.panel_search_focus = Some(Focus::Feeds);
+        app.state.input_buffer.clear();
+
+        handle_input_mode(&mut app, key(KeyCode::Char('r')));
+        handle_input_mode(&mut app, key(KeyCode::Char('u')));
+        assert_eq!(app.state.feed_filter_query.as_deref(), Some("ru"));
+    }
+
+    #[test]
+    fn panel_search_typing_updates_preview_search() {
+        let mut app = test_app();
+        app.state.input_mode = InputMode::PanelSearch;
+        app.state.panel_search_focus = Some(Focus::Preview);
+        app.state.input_buffer.clear();
+
+        handle_input_mode(&mut app, key(KeyCode::Char('a')));
+        handle_input_mode(&mut app, key(KeyCode::Char('b')));
+        assert_eq!(app.state.preview_search_query.as_deref(), Some("ab"));
+    }
+
+    #[test]
+    fn panel_search_backspace_clears_filter_when_empty() {
+        let mut app = test_app();
+        app.state.input_mode = InputMode::PanelSearch;
+        app.state.panel_search_focus = Some(Focus::Feeds);
+        app.state.input_buffer = "r".to_string();
+        app.state.feed_filter_query = Some("r".to_string());
+
+        handle_input_mode(&mut app, key(KeyCode::Backspace));
+        assert!(app.state.feed_filter_query.is_none());
+    }
+
+    #[test]
+    fn panel_search_not_rendered_as_modal() {
+        let lang = Lang::from_code("en");
+        let mut state = AppState::default();
+        state.input_mode = InputMode::PanelSearch;
+        assert!(current_modal(&state, &lang).is_none());
     }
 }

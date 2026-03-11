@@ -22,6 +22,8 @@ pub enum Action {
         since: Option<i64>,
     },
     RefreshFeeds,
+    RefreshFeed(i64),
+    RefreshFeedsByGroup(Option<i64>),
     RefreshUnreadCounts,
     FeedsLoaded(Vec<Feed>),
     EntriesLoaded(Vec<Entry>),
