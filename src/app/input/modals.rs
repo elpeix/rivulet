@@ -15,13 +15,21 @@ pub fn handle_help_key(app: &mut App, key: KeyEvent) {
             app.state.help_scroll = 0;
         }
         KeyCode::Down | KeyCode::Char('j') => {
-            app.state.help_scroll = app.state.help_scroll.saturating_add(1);
+            app.state.help_scroll = app
+                .state
+                .help_scroll
+                .saturating_add(1)
+                .min(app.state.help_max_scroll);
         }
         KeyCode::Up | KeyCode::Char('k') => {
             app.state.help_scroll = app.state.help_scroll.saturating_sub(1);
         }
         KeyCode::PageDown => {
-            app.state.help_scroll = app.state.help_scroll.saturating_add(10);
+            app.state.help_scroll = app
+                .state
+                .help_scroll
+                .saturating_add(10)
+                .min(app.state.help_max_scroll);
         }
         KeyCode::PageUp => {
             app.state.help_scroll = app.state.help_scroll.saturating_sub(10);
@@ -30,9 +38,21 @@ pub fn handle_help_key(app: &mut App, key: KeyEvent) {
             app.state.help_scroll = 0;
         }
         KeyCode::End => {
-            app.state.help_scroll = u16::MAX;
+            app.state.help_scroll = app.state.help_max_scroll;
         }
         _ => {}
+    }
+}
+
+pub fn handle_help_scroll(app: &mut App, delta: i16) {
+    if delta > 0 {
+        app.state.help_scroll = app
+            .state
+            .help_scroll
+            .saturating_add(delta as u16)
+            .min(app.state.help_max_scroll);
+    } else {
+        app.state.help_scroll = app.state.help_scroll.saturating_sub(delta.unsigned_abs());
     }
 }
 
@@ -558,11 +578,45 @@ mod tests {
         let mut app = test_app();
         app.state.show_help = true;
         app.state.help_scroll = 5;
+        app.state.help_max_scroll = 20;
 
         handle_help_key(&mut app, key(KeyCode::Char('j')));
         assert_eq!(app.state.help_scroll, 6);
 
         handle_help_key(&mut app, key(KeyCode::Char('k')));
+        assert_eq!(app.state.help_scroll, 5);
+    }
+
+    #[test]
+    fn help_scroll_clamped_to_max() {
+        let mut app = test_app();
+        app.state.show_help = true;
+        app.state.help_scroll = 9;
+        app.state.help_max_scroll = 10;
+
+        handle_help_key(&mut app, key(KeyCode::Char('j')));
+        assert_eq!(app.state.help_scroll, 10);
+
+        // Can't go past max
+        handle_help_key(&mut app, key(KeyCode::Char('j')));
+        assert_eq!(app.state.help_scroll, 10);
+
+        // End goes to max, not u16::MAX
+        handle_help_key(&mut app, key(KeyCode::End));
+        assert_eq!(app.state.help_scroll, 10);
+    }
+
+    #[test]
+    fn help_mouse_scroll() {
+        let mut app = test_app();
+        app.state.show_help = true;
+        app.state.help_scroll = 5;
+        app.state.help_max_scroll = 20;
+
+        handle_help_scroll(&mut app, 3);
+        assert_eq!(app.state.help_scroll, 8);
+
+        handle_help_scroll(&mut app, -3);
         assert_eq!(app.state.help_scroll, 5);
     }
 

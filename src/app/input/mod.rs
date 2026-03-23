@@ -3,7 +3,7 @@ mod modals;
 mod mouse;
 
 pub use keyboard::handle_key;
-pub use modals::{current_modal, handle_help_key, handle_input_mode};
+pub use modals::{current_modal, handle_help_key, handle_help_scroll, handle_input_mode};
 pub use mouse::handle_mouse;
 
 use crate::app::App;

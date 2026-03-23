@@ -241,6 +241,18 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
                 let _ = app.dispatch(Action::MarkAllRead(unread_ids));
             }
         }
+        KeyCode::Char('x') => {
+            // Clear read entries from the visible list (without reloading from DB)
+            if app.state.focus == Focus::Entries && app.state.unread_only {
+                app.state.entries.retain(|e| e.read_at.is_none());
+                app.state.rebuild_entry_index();
+                app.state.fixup_entry_selection();
+            }
+        }
+        KeyCode::F(5) => {
+            // Full reload of entries from DB (non-merge)
+            dispatch_load_entries(app);
+        }
         KeyCode::Char('S') => {
             app.state.sort_mode = app.state.sort_mode.next();
             let label = match app.state.sort_mode {
@@ -291,6 +303,11 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
                 if let Some(&line) = app.state.preview_match_lines.get(prev) {
                     app.state.preview_scroll = line as u16;
                 }
+            }
+        }
+        KeyCode::Char('y') => {
+            if app.state.focus == Focus::Preview {
+                copy_preview_to_clipboard(app);
             }
         }
         KeyCode::Char('o') => {
@@ -835,6 +852,120 @@ mod tests {
         assert_eq!(app.state.focus, Focus::Entries);
         // Feed filter stays untouched
         assert_eq!(app.state.feed_filter_query.as_deref(), Some("query"));
+    }
+
+    #[test]
+    fn y_outside_preview_is_noop() {
+        let mut app = test_app();
+        app.state.focus = Focus::Feeds;
+        handle_key(&mut app, key(KeyCode::Char('y')));
+        assert!(app.state.status.is_none());
+
+        app.state.focus = Focus::Entries;
+        handle_key(&mut app, key(KeyCode::Char('y')));
+        assert!(app.state.status.is_none());
+    }
+
+    #[test]
+    fn y_preview_no_entry_shows_error() {
+        let mut app = test_app();
+        app.state.focus = Focus::Preview;
+        app.state.selected_entry = None;
+        handle_key(&mut app, key(KeyCode::Char('y')));
+        let status = app.state.status.as_ref().expect("status should be set");
+        assert!(status.message.contains(&app.lang.no_entry_selected));
+    }
+
+    #[test]
+    fn y_preview_with_entry_sets_status() {
+        let mut app = test_app();
+        let mut entry = sample_entry(10);
+        entry.content = Some("<p>Hello world</p>".to_string());
+        app.state.reduce(Action::EntriesLoaded(vec![entry]));
+        app.state.focus = Focus::Preview;
+        handle_key(&mut app, key(KeyCode::Char('y')));
+        let status = app.state.status.as_ref().expect("status should be set");
+        // Either copied or failed (clipboard may not be available in all environments)
+        let msg = &status.message;
+        assert!(
+            msg.contains(&app.lang.copied_to_clipboard) || msg.contains(&app.lang.copy_failed),
+            "unexpected status: {msg}"
+        );
+    }
+
+    #[test]
+    fn x_clears_read_entries_when_unread_only() {
+        let mut app = test_app();
+        let mut e1 = sample_entry(10);
+        e1.read_at = Some(1000); // read
+        let e2 = sample_entry(11); // unread
+        let mut e3 = sample_entry(12);
+        e3.read_at = Some(2000); // read
+        app.state.entries = vec![e1, e2, e3];
+        app.state.selected_entry = Some(10);
+        app.state.selected_entry_index = Some(0);
+        app.state.rebuild_entry_index();
+        app.state.unread_only = true;
+        app.state.focus = Focus::Entries;
+
+        handle_key(&mut app, key(KeyCode::Char('x')));
+
+        assert_eq!(app.state.entries.len(), 1);
+        assert_eq!(app.state.entries[0].id, 11);
+        assert_eq!(app.state.selected_entry, Some(11));
+    }
+
+    #[test]
+    fn x_noop_when_not_unread_only() {
+        let mut app = test_app();
+        let mut e1 = sample_entry(10);
+        e1.read_at = Some(1000);
+        let e2 = sample_entry(11);
+        app.state.entries = vec![e1, e2];
+        app.state.rebuild_entry_index();
+        app.state.unread_only = false;
+
+        handle_key(&mut app, key(KeyCode::Char('x')));
+
+        // Nothing removed since unread_only is false
+        assert_eq!(app.state.entries.len(), 2);
+    }
+}
+
+fn copy_preview_to_clipboard(app: &mut App) {
+    let entry = app
+        .state
+        .selected_entry
+        .and_then(|id| app.state.entry_position(id))
+        .and_then(|i| app.state.entries.get(i));
+    let entry = match entry {
+        Some(e) => e,
+        None => {
+            let _ = app.dispatch(Action::SetStatus(app.lang.no_entry_selected.to_string()));
+            return;
+        }
+    };
+    let title = entry.title.as_deref().unwrap_or("");
+    let html = entry
+        .content
+        .as_deref()
+        .or(entry.summary.as_deref())
+        .unwrap_or("");
+    let body = html2text::config::plain_no_decorate()
+        .string_from_read(html.as_bytes(), 10_000)
+        .unwrap_or_default();
+    let text = if title.is_empty() {
+        body
+    } else {
+        format!("{title}\n\n{body}")
+    };
+    match arboard::Clipboard::new().and_then(|mut cb| cb.set_text(&text)) {
+        Ok(()) => {
+            let _ = app.dispatch(Action::SetStatus(app.lang.copied_to_clipboard.to_string()));
+        }
+        Err(e) => {
+            let _ = app.dispatch(Action::SetStatus(format!("{}: {e}", app.lang.copy_failed)));
+        }
     }
 }
 

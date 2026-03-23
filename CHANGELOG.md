@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.3.0] - 2026-03-16
+
+### Added
+
+- **Copy preview to clipboard**: Press `y` in the Preview panel to copy the rendered text (title + body) to the system clipboard
+- **Clear read entries**: Press `x` in the Entries panel (when unread filter is active) to remove already-read entries from the visible list
+- **Reload entries**: Press `F5` to force a full reload of entries from the database
+- **Mouse scroll in help modal**: Scroll up/down with the mouse wheel while the help dialog is open
+
+### Changed
+
+- **Merge-based refresh**: After a background refresh, new entries are merged into the current list instead of replacing it, preserving read entries and scroll position
+- **Help scroll clamping**: Help modal scroll is now bounded to the actual content height instead of allowing unbounded scrolling
+- New dependency: `arboard` for cross-platform clipboard support
+
+### Internal
+
+- New `Action::EntriesMerged` for merge-based entry loading
+- Extracted `fixup_entry_selection()` and `resort_entries()` from reducers to reduce duplication
+- `handle_help_scroll()` shared between keyboard and mouse input
+- `help_max_scroll` field in `AppState` computed during render
+- New i18n keys: `copied_to_clipboard`, `copy_failed`, `help_copy_preview`, `help_clear_read`, `help_reload_entries` (en + ca)
+- New tests: clipboard copy, clear read entries, merge entries, resort, help scroll clamping, help mouse scroll
+
 ## [1.2.0] - 2026-03-11
 
 ### Added

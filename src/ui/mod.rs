@@ -342,7 +342,7 @@ fn draw_preview_panel(
 
 fn draw_modal(
     frame: &mut Frame<'_>,
-    state: &AppState,
+    state: &mut AppState,
     theme: &Theme,
     modal_state: Modal,
     lang: &Lang,
@@ -400,7 +400,7 @@ fn draw_modal(
             frame.render_widget(modal(&title, text, theme), area);
         }
         Modal::Help { scroll } => {
-            draw_help_modal(frame, theme, area, scroll, lang);
+            draw_help_modal(frame, state, theme, area, scroll, lang);
         }
         Modal::FeedInfo { title, url } => {
             let text = Text::from(vec![
@@ -468,7 +468,14 @@ fn draw_modal(
     }
 }
 
-fn draw_help_modal(frame: &mut Frame<'_>, theme: &Theme, area: Rect, scroll: u16, lang: &Lang) {
+fn draw_help_modal(
+    frame: &mut Frame<'_>,
+    state: &mut AppState,
+    theme: &Theme,
+    area: Rect,
+    scroll: u16,
+    lang: &Lang,
+) {
     let inner_width = area.width.saturating_sub(2) as usize;
     let separator = Line::from(Span::styled(
         "\u{2500}".repeat(inner_width),
@@ -556,13 +563,20 @@ fn draw_help_modal(frame: &mut Frame<'_>, theme: &Theme, area: Rect, scroll: u16
             &lang.help_toggle_read,
         ),
         row("M", &lang.help_mark_all_read, "s", &lang.help_save_later),
+        row("x", &lang.help_clear_read, "", ""),
         row("/", &lang.help_search, "n / N", &lang.help_search_next),
-        row("o", &lang.help_open_browser, "Tab", &lang.help_next_link),
+        row("o", &lang.help_open_browser, "y", &lang.help_copy_preview),
         row(
+            "Tab",
+            &lang.help_next_link,
             "Shift-Tab",
             &lang.help_prev_link,
+        ),
+        row(
             "r",
             &lang.help_refresh_feed,
+            "F5",
+            &lang.help_reload_entries,
         ),
         Line::from(""),
         heading(&lang.help_general),
@@ -572,6 +586,7 @@ fn draw_help_modal(frame: &mut Frame<'_>, theme: &Theme, area: Rect, scroll: u16
     let content_height = text.lines.len();
     let inner_height = area.height.saturating_sub(2) as usize;
     let max_scroll = u16::try_from(content_height.saturating_sub(inner_height)).unwrap_or(u16::MAX);
+    state.help_max_scroll = max_scroll;
     let clamped = scroll.min(max_scroll);
     let title = if content_height > inner_height {
         let has_up = clamped > 0;
