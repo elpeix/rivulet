@@ -6,6 +6,8 @@ A terminal RSS reader built with Rust and [ratatui](https://github.com/ratatui-o
 ![Rust](https://img.shields.io/badge/lang-Rust-orange)
 ![License](https://img.shields.io/badge/license-GPLv3-green)
 
+![Screenshot](./doc/rivulet.png)
+
 ## Features
 
 - **Dual layout** — 3-column (Feeds | Entries | Preview) or 2-column split mode, toggle with `w`
@@ -67,48 +69,48 @@ Categories are preserved during import and export.
 
 ### Key bindings
 
-| Key | Action |
-|---|---|
-| **Navigation** | |
-| `Left` / `Right` | Previous / next panel |
-| `1` / `2` / `3` | Jump to Feeds / Entries / Preview |
-| `Up` / `Down` | Move selection |
-| `PgUp` / `PgDn` | Scroll preview |
-| `Home` / `End` | Top / bottom |
-| `H` / `L` | Resize focused panel |
-| `w` | Toggle layout (columns / split) |
-| `Enter` | Select feed / open entry |
-| `Space` | Collapse/expand category (feeds) / select entry (entries) |
-| `Esc` | Back |
-| **Feeds** | |
-| `a` | Add feed |
-| `e` | Rename feed |
-| `d` | Delete feed |
-| `r` | Refresh all feeds |
-| `f` | Toggle unread filter |
-| `g` | Toggle saved filter |
-| `c` | Assign category |
-| `C` | Manage categories |
-| `R` | Mark feed as read |
-| `S` | Cycle sort mode |
-| `i` | Feed info (name and URL) |
-| `.` | Hide/show read feeds |
-| `t` | Toggle time filter |
-| **Entries** | |
-| `m` | Toggle read/unread |
-| `M` | Mark all visible as read |
-| `s` | Save for later |
-| `r` | Refresh selected feed |
-| `/` | Search (contextual: feeds / entries / preview) |
-| `n` / `N` | Next / previous search match (preview) |
-| `o` | Open in browser |
-| `y` | Copy preview to clipboard |
-| `x` | Clear read entries (when unread filter active) |
-| `F5` | Reload entries from database |
-| `Tab` / `Shift+Tab` | Next / previous link in preview |
-| **General** | |
-| `?` | Help |
-| `q` | Quit |
+| Key                 | Action                                                    |
+| ------------------- | --------------------------------------------------------- |
+| **Navigation**      |                                                           |
+| `Left` / `Right`    | Previous / next panel                                     |
+| `1` / `2` / `3`     | Jump to Feeds / Entries / Preview                         |
+| `Up` / `Down`       | Move selection                                            |
+| `PgUp` / `PgDn`     | Scroll preview                                            |
+| `Home` / `End`      | Top / bottom                                              |
+| `H` / `L`           | Resize focused panel                                      |
+| `w`                 | Toggle layout (columns / split)                           |
+| `Enter`             | Select feed / open entry                                  |
+| `Space`             | Collapse/expand category (feeds) / select entry (entries) |
+| `Esc`               | Back                                                      |
+| **Feeds**           |                                                           |
+| `a`                 | Add feed                                                  |
+| `e`                 | Rename feed                                               |
+| `d`                 | Delete feed                                               |
+| `r`                 | Refresh all feeds                                         |
+| `f`                 | Toggle unread filter                                      |
+| `g`                 | Toggle saved filter                                       |
+| `c`                 | Assign category                                           |
+| `C`                 | Manage categories                                         |
+| `R`                 | Mark feed as read                                         |
+| `S`                 | Cycle sort mode                                           |
+| `i`                 | Feed info (name and URL)                                  |
+| `.`                 | Hide/show read feeds                                      |
+| `t`                 | Toggle time filter                                        |
+| **Entries**         |                                                           |
+| `m`                 | Toggle read/unread                                        |
+| `M`                 | Mark all visible as read                                  |
+| `s`                 | Save for later                                            |
+| `r`                 | Refresh selected feed                                     |
+| `/`                 | Search (contextual: feeds / entries / preview)            |
+| `n` / `N`           | Next / previous search match (preview)                    |
+| `o`                 | Open in browser                                           |
+| `y`                 | Copy preview to clipboard                                 |
+| `x`                 | Clear read entries (when unread filter active)            |
+| `F5`                | Reload entries from database                              |
+| `Tab` / `Shift+Tab` | Next / previous link in preview                           |
+| **General**         |                                                           |
+| `?`                 | Help                                                      |
+| `q`                 | Quit                                                      |
 
 ## Config
 
