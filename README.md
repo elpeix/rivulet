@@ -102,6 +102,9 @@ Categories are preserved during import and export.
 | `/` | Search (contextual: feeds / entries / preview) |
 | `n` / `N` | Next / previous search match (preview) |
 | `o` | Open in browser |
+| `y` | Copy preview to clipboard |
+| `x` | Clear read entries (when unread filter active) |
+| `F5` | Reload entries from database |
 | `Tab` / `Shift+Tab` | Next / previous link in preview |
 | **General** | |
 | `?` | Help |

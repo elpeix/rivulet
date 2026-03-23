@@ -770,72 +770,76 @@ impl App {
         let saved_only = self.state.saved_only;
         let sort_mode = self.state.sort_mode;
 
-        if let Some(feed_id) = self.state.selected_feed {
+        let response = if let Some(feed_id) = self.state.selected_feed {
             if let Some(query) = self.state.search_query.clone() {
-                let response = self.db.send(DbCommand::SearchEntries {
+                self.db.send(DbCommand::SearchEntries {
                     feed_id: Some(feed_id),
                     query,
                     unread_only,
                     saved_only,
                     since,
-                })?;
-                self.handle_db_response(response);
+                })?
             } else {
-                let response = self.db.send(DbCommand::EntriesForFeedFiltered {
+                self.db.send(DbCommand::EntriesForFeedFiltered {
                     feed_id,
                     unread_only,
                     saved_only,
                     since,
                     sort_mode,
-                })?;
-                self.handle_db_response(response);
+                })?
             }
         } else if self.state.viewing_group {
-            // Reload group/all entries based on current feed row selection
             if let Some(row_idx) = self.state.selected_feed_row_index {
                 match self.state.feed_rows.get(row_idx).cloned() {
                     Some(state::FeedRow::GroupHeader { group_id, .. }) => {
-                        let response = self.db.send(DbCommand::EntriesForGroupFiltered {
+                        self.db.send(DbCommand::EntriesForGroupFiltered {
                             group_id: Some(group_id),
                             unread_only,
                             saved_only,
                             since,
                             sort_mode,
-                        })?;
-                        self.handle_db_response(response);
+                        })?
                     }
                     Some(state::FeedRow::UngroupedHeader { .. }) => {
-                        let response = self.db.send(DbCommand::EntriesForGroupFiltered {
+                        self.db.send(DbCommand::EntriesForGroupFiltered {
                             group_id: None,
                             unread_only,
                             saved_only,
                             since,
                             sort_mode,
-                        })?;
-                        self.handle_db_response(response);
+                        })?
                     }
-                    _ => {
-                        let response = self.db.send(DbCommand::AllEntriesFiltered {
-                            unread_only,
-                            saved_only,
-                            since,
-                            sort_mode,
-                        })?;
-                        self.handle_db_response(response);
-                    }
+                    _ => self.db.send(DbCommand::AllEntriesFiltered {
+                        unread_only,
+                        saved_only,
+                        since,
+                        sort_mode,
+                    })?,
                 }
             } else {
-                let response = self.db.send(DbCommand::AllEntriesFiltered {
+                self.db.send(DbCommand::AllEntriesFiltered {
                     unread_only,
                     saved_only,
                     since,
                     sort_mode,
-                })?;
-                self.handle_db_response(response);
+                })?
             }
-        }
+        } else {
+            return Ok(());
+        };
+
+        self.handle_entries_response_merge(response);
 
         Ok(())
+    }
+
+    fn handle_entries_response_merge(&mut self, response: DbResponse) {
+        match response {
+            DbResponse::Entries(Ok(entries)) => {
+                self.state.reduce(Action::EntriesMerged(entries));
+            }
+            other => self.handle_db_response(other),
+        }
     }
 }
 

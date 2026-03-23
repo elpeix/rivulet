@@ -131,6 +131,7 @@ pub struct AppState {
     pub selected_entries: HashSet<i64>,
     pub show_help: bool,
     pub help_scroll: u16,
+    pub help_max_scroll: u16,
     pub modal_selection: usize,
     feed_rows_dirty: bool,
     entry_id_to_index: HashMap<i64, usize>,
@@ -195,6 +196,7 @@ impl Default for AppState {
             selected_entries: HashSet::new(),
             show_help: false,
             help_scroll: 0,
+            help_max_scroll: 0,
             modal_selection: 0,
             feed_rows_dirty: false,
             entry_id_to_index: HashMap::new(),
@@ -238,10 +240,51 @@ impl AppState {
         Action::RefreshFeeds
     }
 
-    fn rebuild_entry_index(&mut self) {
+    pub fn rebuild_entry_index(&mut self) {
         self.entry_id_to_index.clear();
         for (i, entry) in self.entries.iter().enumerate() {
             self.entry_id_to_index.insert(entry.id, i);
+        }
+    }
+
+    pub fn fixup_entry_selection(&mut self) {
+        if self.entries.is_empty() {
+            self.selected_entry = None;
+            self.selected_entry_index = None;
+            self.preview_scroll = 0;
+        } else if let Some(selected_id) = self.selected_entry {
+            self.selected_entry_index = self.entry_position(selected_id);
+            if self.selected_entry_index.is_none() {
+                self.select_entry_index(0);
+            }
+        } else if self.selected_entry_index.is_none() {
+            self.select_entry_index(0);
+        }
+    }
+
+    fn resort_entries(&mut self) {
+        match self.sort_mode {
+            SortMode::DateDesc => {
+                self.entries.sort_by(|a, b| {
+                    let ta = a.published_at.unwrap_or(a.fetched_at);
+                    let tb = b.published_at.unwrap_or(b.fetched_at);
+                    tb.cmp(&ta)
+                });
+            }
+            SortMode::DateAsc => {
+                self.entries.sort_by(|a, b| {
+                    let ta = a.published_at.unwrap_or(a.fetched_at);
+                    let tb = b.published_at.unwrap_or(b.fetched_at);
+                    ta.cmp(&tb)
+                });
+            }
+            SortMode::TitleAsc => {
+                self.entries.sort_by(|a, b| {
+                    let ta = a.title.as_deref().unwrap_or("");
+                    let tb = b.title.as_deref().unwrap_or("");
+                    ta.to_lowercase().cmp(&tb.to_lowercase())
+                });
+            }
         }
     }
 
@@ -255,18 +298,20 @@ impl AppState {
                 self.entries = entries;
                 self.selected_entries.clear();
                 self.rebuild_entry_index();
-                if self.entries.is_empty() {
-                    self.selected_entry = None;
-                    self.selected_entry_index = None;
-                    self.preview_scroll = 0;
-                } else if let Some(selected_id) = self.selected_entry {
-                    self.selected_entry_index = self.entry_position(selected_id);
-                    if self.selected_entry_index.is_none() {
-                        self.select_entry_index(0);
+                self.fixup_entry_selection();
+            }
+            Action::EntriesMerged(fresh) => {
+                // Keep existing entries (including read ones still visible),
+                // add any new entries from the fresh query.
+                let existing_ids: HashSet<i64> = self.entries.iter().map(|e| e.id).collect();
+                for entry in fresh {
+                    if !existing_ids.contains(&entry.id) {
+                        self.entries.push(entry);
                     }
-                } else if self.selected_entry_index.is_none() {
-                    self.select_entry_index(0);
                 }
+                self.resort_entries();
+                self.rebuild_entry_index();
+                self.fixup_entry_selection();
             }
             Action::SelectFeed(feed_id) => {
                 self.selected_feed = feed_id;
@@ -1231,5 +1276,91 @@ mod tests {
             state.contextual_refresh_action(),
             Action::RefreshFeeds
         ));
+    }
+
+    #[test]
+    fn entries_merged_adds_new_keeps_existing() {
+        let mut state = AppState::default();
+        let mut e1 = sample_entry(10, 1, "Old");
+        e1.read_at = Some(1000); // already read
+        e1.published_at = Some(100);
+        let mut e2 = sample_entry(11, 1, "Existing unread");
+        e2.published_at = Some(200);
+        state.reduce(Action::EntriesLoaded(vec![e1.clone(), e2.clone()]));
+        assert_eq!(state.entries.len(), 2);
+
+        // Merge: e11 already exists, e12 is new
+        let mut e3 = sample_entry(12, 1, "Brand new");
+        e3.published_at = Some(300);
+        state.reduce(Action::EntriesMerged(vec![e2.clone(), e3.clone()]));
+
+        // All three should be present (read entry e1 kept, new e3 added)
+        assert_eq!(state.entries.len(), 3);
+        assert_eq!(state.entries[0].id, 12); // newest first (DateDesc)
+        assert_eq!(state.entries[1].id, 11);
+        assert_eq!(state.entries[2].id, 10); // read entry still here
+    }
+
+    #[test]
+    fn entries_merged_preserves_selection() {
+        let mut state = AppState::default();
+        let mut e1 = sample_entry(10, 1, "A");
+        e1.published_at = Some(100);
+        let mut e2 = sample_entry(11, 1, "B");
+        e2.published_at = Some(200);
+        state.reduce(Action::EntriesLoaded(vec![e2.clone(), e1.clone()]));
+        state.selected_entry = Some(10);
+        state.selected_entry_index = Some(1);
+
+        let mut e3 = sample_entry(12, 1, "C");
+        e3.published_at = Some(300);
+        state.reduce(Action::EntriesMerged(vec![e3]));
+
+        // Selection should still be on entry 10
+        assert_eq!(state.selected_entry, Some(10));
+        assert_eq!(state.selected_entry_index, Some(2)); // shifted by new entry
+    }
+
+    #[test]
+    fn entries_merged_empty_is_noop() {
+        let mut state = AppState::default();
+        let entries = vec![sample_entry(10, 1, "A")];
+        state.reduce(Action::EntriesLoaded(entries));
+        state.reduce(Action::EntriesMerged(Vec::new()));
+        assert_eq!(state.entries.len(), 1);
+        assert_eq!(state.selected_entry, Some(10));
+    }
+
+    #[test]
+    fn resort_entries_respects_sort_mode() {
+        let mut state = AppState::default();
+        let mut e1 = sample_entry(1, 1, "Banana");
+        e1.published_at = Some(100);
+        let mut e2 = sample_entry(2, 1, "Apple");
+        e2.published_at = Some(200);
+        state.entries = vec![e1, e2];
+
+        state.sort_mode = SortMode::DateDesc;
+        state.resort_entries();
+        assert_eq!(state.entries[0].id, 2); // newer first
+
+        state.sort_mode = SortMode::DateAsc;
+        state.resort_entries();
+        assert_eq!(state.entries[0].id, 1); // older first
+
+        state.sort_mode = SortMode::TitleAsc;
+        state.resort_entries();
+        assert_eq!(state.entries[0].title.as_deref(), Some("Apple"));
+    }
+
+    #[test]
+    fn fixup_entry_selection_selects_first_when_current_gone() {
+        let mut state = AppState::default();
+        state.entries = vec![sample_entry(10, 1, "A"), sample_entry(11, 1, "B")];
+        state.rebuild_entry_index();
+        state.selected_entry = Some(99); // doesn't exist
+        state.fixup_entry_selection();
+        assert_eq!(state.selected_entry, Some(10));
+        assert_eq!(state.selected_entry_index, Some(0));
     }
 }

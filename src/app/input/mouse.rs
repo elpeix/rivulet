@@ -7,6 +7,20 @@ use crate::ui;
 use crate::util::open::open_url;
 
 pub fn handle_mouse(app: &mut App, event: MouseEvent, area: ratatui::layout::Rect) {
+    // When help modal is open, only handle scroll events for it
+    if app.state.show_help {
+        match event.kind {
+            MouseEventKind::ScrollUp => {
+                super::handle_help_scroll(app, -3);
+            }
+            MouseEventKind::ScrollDown => {
+                super::handle_help_scroll(app, 3);
+            }
+            _ => {}
+        }
+        return;
+    }
+
     let layout = ui::layout::build_layout(
         area,
         app.state.layout_mode,

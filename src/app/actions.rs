@@ -27,6 +27,7 @@ pub enum Action {
     RefreshUnreadCounts,
     FeedsLoaded(Vec<Feed>),
     EntriesLoaded(Vec<Entry>),
+    EntriesMerged(Vec<Entry>),
     SelectFeed(Option<i64>),
     SelectEntry(Option<i64>),
     FocusEntries,
