@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.3.1] - 2026-04-02
+
+### Fixed
+
+- **Save no longer clears read entries**: Pressing `s` to save/unsave entries while the unread filter was active would reload entries from the database, removing read entries from the visible list
+
+### Internal
+
+- Deduplicated save-toggle logic: `RefreshUnreadCounts` and `dispatch_load_entries` are now called once after the save branch instead of in each arm
+
 ## [1.3.0] - 2026-03-16
 
 ### Added
