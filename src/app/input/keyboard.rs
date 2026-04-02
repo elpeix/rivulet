@@ -314,6 +314,7 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
             open_selected_link_or_entry(app);
         }
         KeyCode::Char('s') => {
+            let mut toggled = false;
             if !app.state.selected_entries.is_empty() {
                 let ids: Vec<i64> = app.state.selected_entries.iter().copied().collect();
                 let timestamp = now_timestamp();
@@ -341,8 +342,7 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
                     let _ = app.dispatch(Action::MarkAllUnsaved(ids));
                 }
                 app.state.selected_entries.clear();
-                let _ = app.dispatch(Action::RefreshUnreadCounts);
-                dispatch_load_entries(app);
+                toggled = true;
             } else if let Some(entry_id) = app.state.selected_entry {
                 if let Some(idx) = app.state.entry_position(entry_id) {
                     if app.state.entries[idx].saved_at.is_some() {
@@ -353,8 +353,13 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
                         let _ = app.dispatch(Action::MarkSaved(entry_id));
                     }
                 }
+                toggled = true;
+            }
+            if toggled {
                 let _ = app.dispatch(Action::RefreshUnreadCounts);
-                dispatch_load_entries(app);
+                if app.state.saved_only {
+                    dispatch_load_entries(app);
+                }
             }
         }
         KeyCode::Char('/') => {
