@@ -6,7 +6,7 @@ A terminal RSS reader built with Rust and [ratatui](https://github.com/ratatui-o
 ![Rust](https://img.shields.io/badge/lang-Rust-orange)
 ![License](https://img.shields.io/badge/license-GPLv3-green)
 
-![Screenshot](./doc/rivulet.png)
+![Screenshot](./doc/rivulet.jpeg)
 
 ## Features
 
