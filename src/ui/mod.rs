@@ -491,19 +491,19 @@ fn draw_help_modal(
     let row = |left_key: &str, left_label: &str, right_key: &str, right_label: &str| {
         Line::from(vec![
             Span::styled(
-                format!("  {left_key:<12}"),
+                format!("  {left_key:<14}"),
                 Style::default().fg(theme.accent_alt),
             ),
             Span::styled(
                 format!(
                     "{:<width$}",
                     left_label,
-                    width = col_width.saturating_sub(14)
+                    width = col_width.saturating_sub(16)
                 ),
                 Style::default().fg(theme.text),
             ),
             Span::styled(
-                format!("{right_key:<12}"),
+                format!("{right_key:<14}"),
                 Style::default().fg(theme.accent_alt),
             ),
             Span::styled(right_label.to_string(), Style::default().fg(theme.text)),
@@ -522,7 +522,7 @@ fn draw_help_modal(
         row(
             "PgUp/PgDn",
             &lang.help_scroll_preview,
-            "Home/End",
+            "Home/End g/G",
             &lang.help_top_bottom,
         ),
         row(
@@ -543,7 +543,7 @@ fn draw_help_modal(
         separator.clone(),
         row("a", &lang.help_add_feed, "e", &lang.help_rename_feed),
         row("d", &lang.help_delete_feed, "r", &lang.help_refresh_all),
-        row("f", &lang.help_toggle_unread, "g", &lang.help_toggle_saved),
+        row("f", &lang.help_toggle_unread, "b", &lang.help_toggle_saved),
         row(
             "c",
             &lang.help_assign_category,

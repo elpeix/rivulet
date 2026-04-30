@@ -369,17 +369,45 @@ impl AppState {
             Action::PageDown => {
                 self.scroll_preview(10);
             }
-            Action::ScrollTop => {
-                if self.focus == Focus::Preview {
-                    self.preview_scroll = 0
+            Action::ScrollTop => match self.focus {
+                Focus::Preview => self.preview_scroll = 0,
+                Focus::Feeds => {
+                    if !self.feed_rows.is_empty() {
+                        self.selected_feed_row_index = Some(0);
+                        if let Some(FeedRow::FeedItem { feed_index }) = self.feed_rows.first() {
+                            let fi = *feed_index;
+                            self.select_feed_index(fi);
+                        }
+                    }
                 }
-            }
-            Action::ScrollBottom => {
-                if self.focus == Focus::Preview {
+                Focus::Entries => {
+                    if !self.entries.is_empty() {
+                        self.select_entry_index(0);
+                    }
+                }
+            },
+            Action::ScrollBottom => match self.focus {
+                Focus::Preview => {
                     self.preview_scroll = u16::try_from(self.preview_content_len.saturating_sub(1))
                         .unwrap_or(u16::MAX)
                 }
-            }
+                Focus::Feeds => {
+                    if !self.feed_rows.is_empty() {
+                        let last = self.feed_rows.len() - 1;
+                        self.selected_feed_row_index = Some(last);
+                        if let Some(FeedRow::FeedItem { feed_index }) = self.feed_rows.get(last) {
+                            let fi = *feed_index;
+                            self.select_feed_index(fi);
+                        }
+                    }
+                }
+                Focus::Entries => {
+                    if !self.entries.is_empty() {
+                        let last = self.entries.len() - 1;
+                        self.select_entry_index(last);
+                    }
+                }
+            },
             Action::UpdateUnreadCounts(counts) => {
                 let old_counts =
                     std::mem::replace(&mut self.unread_counts, counts.into_iter().collect());
