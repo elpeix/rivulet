@@ -24,20 +24,20 @@ pub fn handle_help_key(app: &mut App, key: KeyEvent) {
         KeyCode::Up | KeyCode::Char('k') => {
             app.state.help_scroll = app.state.help_scroll.saturating_sub(1);
         }
-        KeyCode::PageDown => {
+        KeyCode::PageDown | KeyCode::Char('J') => {
             app.state.help_scroll = app
                 .state
                 .help_scroll
                 .saturating_add(10)
                 .min(app.state.help_max_scroll);
         }
-        KeyCode::PageUp => {
+        KeyCode::PageUp | KeyCode::Char('K') => {
             app.state.help_scroll = app.state.help_scroll.saturating_sub(10);
         }
-        KeyCode::Home => {
+        KeyCode::Home | KeyCode::Char('g') => {
             app.state.help_scroll = 0;
         }
-        KeyCode::End => {
+        KeyCode::End | KeyCode::Char('G') => {
             app.state.help_scroll = app.state.help_max_scroll;
         }
         _ => {}
@@ -147,19 +147,17 @@ pub fn handle_input_mode(app: &mut App, key: KeyEvent) -> bool {
                         });
                     }
                 }
-                InputMode::AddFeed => {
-                    if !value.is_empty() {
-                        if app.state.groups.is_empty() {
-                            let _ = app.dispatch(Action::AddFeed {
-                                title: None,
-                                url: value,
-                                group_id: None,
-                            });
-                        } else {
-                            app.state.input_mode = InputMode::AddFeedGroup { url: value };
-                            app.state.modal_selection = 0;
-                            return false;
-                        }
+                InputMode::AddFeed if !value.is_empty() => {
+                    if app.state.groups.is_empty() {
+                        let _ = app.dispatch(Action::AddFeed {
+                            title: None,
+                            url: value,
+                            group_id: None,
+                        });
+                    } else {
+                        app.state.input_mode = InputMode::AddFeedGroup { url: value };
+                        app.state.modal_selection = 0;
+                        return false;
                     }
                 }
                 InputMode::DeleteFeed => {
@@ -225,15 +223,11 @@ fn handle_add_feed_group(app: &mut App, key: KeyEvent) -> bool {
             let _ = app.dispatch(Action::ClearStatus);
             return true;
         }
-        KeyCode::Up | KeyCode::Char('k') => {
-            if app.state.modal_selection > 0 {
-                app.state.modal_selection -= 1;
-            }
+        KeyCode::Up | KeyCode::Char('k') if app.state.modal_selection > 0 => {
+            app.state.modal_selection -= 1;
         }
-        KeyCode::Down | KeyCode::Char('j') => {
-            if app.state.modal_selection + 1 < total_options {
-                app.state.modal_selection += 1;
-            }
+        KeyCode::Down | KeyCode::Char('j') if app.state.modal_selection + 1 < total_options => {
+            app.state.modal_selection += 1;
         }
         KeyCode::Enter => {
             let url = if let InputMode::AddFeedGroup { ref url } = app.state.input_mode {
@@ -268,15 +262,11 @@ fn handle_assign_group(app: &mut App, key: KeyEvent) -> bool {
             let _ = app.dispatch(Action::ClearStatus);
             return true;
         }
-        KeyCode::Up | KeyCode::Char('k') => {
-            if app.state.modal_selection > 0 {
-                app.state.modal_selection -= 1;
-            }
+        KeyCode::Up | KeyCode::Char('k') if app.state.modal_selection > 0 => {
+            app.state.modal_selection -= 1;
         }
-        KeyCode::Down | KeyCode::Char('j') => {
-            if app.state.modal_selection + 1 < total_options {
-                app.state.modal_selection += 1;
-            }
+        KeyCode::Down | KeyCode::Char('j') if app.state.modal_selection + 1 < total_options => {
+            app.state.modal_selection += 1;
         }
         KeyCode::Enter => {
             if let Some(feed_id) = app.state.selected_feed {
@@ -316,15 +306,13 @@ fn handle_manage_groups(app: &mut App, key: KeyEvent) -> bool {
             let _ = app.dispatch(Action::ClearStatus);
             return true;
         }
-        KeyCode::Up | KeyCode::Char('k') => {
-            if app.state.modal_selection > 0 {
-                app.state.modal_selection -= 1;
-            }
+        KeyCode::Up | KeyCode::Char('k') if app.state.modal_selection > 0 => {
+            app.state.modal_selection -= 1;
         }
-        KeyCode::Down | KeyCode::Char('j') => {
-            if group_count > 0 && app.state.modal_selection + 1 < group_count {
-                app.state.modal_selection += 1;
-            }
+        KeyCode::Down | KeyCode::Char('j')
+            if group_count > 0 && app.state.modal_selection + 1 < group_count =>
+        {
+            app.state.modal_selection += 1;
         }
         KeyCode::Char('a') => {
             app.state.input_mode = InputMode::AddGroup;
@@ -347,30 +335,26 @@ fn handle_manage_groups(app: &mut App, key: KeyEvent) -> bool {
                 let _ = app.dispatch(Action::SetStatus(prompt));
             }
         }
-        KeyCode::Char('K') => {
-            if app.state.modal_selection > 0 {
-                if let (Some(a), Some(b)) = (
-                    app.state.groups.get(app.state.modal_selection),
-                    app.state.groups.get(app.state.modal_selection - 1),
-                ) {
-                    let id_a = a.id;
-                    let id_b = b.id;
-                    let _ = app.dispatch(Action::SwapGroupOrder { id_a, id_b });
-                    app.state.modal_selection -= 1;
-                }
+        KeyCode::Char('K') if app.state.modal_selection > 0 => {
+            if let (Some(a), Some(b)) = (
+                app.state.groups.get(app.state.modal_selection),
+                app.state.groups.get(app.state.modal_selection - 1),
+            ) {
+                let id_a = a.id;
+                let id_b = b.id;
+                let _ = app.dispatch(Action::SwapGroupOrder { id_a, id_b });
+                app.state.modal_selection -= 1;
             }
         }
-        KeyCode::Char('J') => {
-            if app.state.modal_selection + 1 < group_count {
-                if let (Some(a), Some(b)) = (
-                    app.state.groups.get(app.state.modal_selection),
-                    app.state.groups.get(app.state.modal_selection + 1),
-                ) {
-                    let id_a = a.id;
-                    let id_b = b.id;
-                    let _ = app.dispatch(Action::SwapGroupOrder { id_a, id_b });
-                    app.state.modal_selection += 1;
-                }
+        KeyCode::Char('J') if app.state.modal_selection + 1 < group_count => {
+            if let (Some(a), Some(b)) = (
+                app.state.groups.get(app.state.modal_selection),
+                app.state.groups.get(app.state.modal_selection + 1),
+            ) {
+                let id_a = a.id;
+                let id_b = b.id;
+                let _ = app.dispatch(Action::SwapGroupOrder { id_a, id_b });
+                app.state.modal_selection += 1;
             }
         }
         _ => {}
@@ -409,13 +393,12 @@ fn handle_group_text_input(app: &mut App, key: KeyEvent) -> bool {
             app.state.input_buffer.pop();
             update_text_status(app, &mode);
         }
-        KeyCode::Char(c) => {
+        KeyCode::Char(c)
             if !key.modifiers.contains(KeyModifiers::CONTROL)
-                && app.state.input_buffer.len() < MAX_GROUP_NAME_LEN
-            {
-                app.state.input_buffer.push(c);
-                update_text_status(app, &mode);
-            }
+                && app.state.input_buffer.len() < MAX_GROUP_NAME_LEN =>
+        {
+            app.state.input_buffer.push(c);
+            update_text_status(app, &mode);
         }
         _ => {}
     }
@@ -446,15 +429,11 @@ fn handle_select_discovered_feed(
             let _ = app.dispatch(Action::ClearStatus);
             return true;
         }
-        KeyCode::Up | KeyCode::Char('k') => {
-            if app.state.modal_selection > 0 {
-                app.state.modal_selection -= 1;
-            }
+        KeyCode::Up | KeyCode::Char('k') if app.state.modal_selection > 0 => {
+            app.state.modal_selection -= 1;
         }
-        KeyCode::Down | KeyCode::Char('j') => {
-            if app.state.modal_selection + 1 < feeds.len() {
-                app.state.modal_selection += 1;
-            }
+        KeyCode::Down | KeyCode::Char('j') if app.state.modal_selection + 1 < feeds.len() => {
+            app.state.modal_selection += 1;
         }
         KeyCode::Enter => {
             if let Some(feed) = feeds.get(app.state.modal_selection) {
@@ -604,6 +583,34 @@ mod tests {
         // End goes to max, not u16::MAX
         handle_help_key(&mut app, key(KeyCode::End));
         assert_eq!(app.state.help_scroll, 10);
+    }
+
+    #[test]
+    fn help_g_and_shift_g_jump_to_top_and_bottom() {
+        let mut app = test_app();
+        app.state.show_help = true;
+        app.state.help_scroll = 3;
+        app.state.help_max_scroll = 15;
+
+        handle_help_key(&mut app, key(KeyCode::Char('G')));
+        assert_eq!(app.state.help_scroll, 15);
+
+        handle_help_key(&mut app, key(KeyCode::Char('g')));
+        assert_eq!(app.state.help_scroll, 0);
+    }
+
+    #[test]
+    fn help_shift_j_and_k_page_scroll() {
+        let mut app = test_app();
+        app.state.show_help = true;
+        app.state.help_scroll = 0;
+        app.state.help_max_scroll = 30;
+
+        handle_help_key(&mut app, key(KeyCode::Char('J')));
+        assert_eq!(app.state.help_scroll, 10);
+
+        handle_help_key(&mut app, key(KeyCode::Char('K')));
+        assert_eq!(app.state.help_scroll, 0);
     }
 
     #[test]

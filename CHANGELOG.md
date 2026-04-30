@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.4.0] - 2026-04-30
+
+### Added
+
+- **Top/bottom navigation in lists**: `g` / `Home` jumps to the first item and `G` / `End` jumps to the last item in the Feeds and Entries panels. Previously these keys only worked in the Preview panel
+- **Vim-style scroll in help modal**: `g` / `G` jump to top/bottom and `J` / `K` page up/down, alongside the existing `j` / `k` / `Home` / `End` / `PgUp` / `PgDn`
+
+### Changed
+
+- **Saved filter moved from `g` to `b`** ⚠️: To free up `g` for top-of-list navigation, the keybinding to toggle the saved filter is now `b` (mnemonic for "bookmark"). Existing users will need to update their muscle memory
+- Help modal column widened to keep keys and labels visually separated when key text is long (e.g. `Home/End g/G`)
+
+### Internal
+
+- `Action::ScrollTop` / `ScrollBottom` reducers extended to handle `Focus::Feeds` and `Focus::Entries` (selecting first/last row), in addition to the existing Preview behavior
+- New tests: `b_toggles_saved_filter`, `g_and_shift_g_jump_to_first_and_last_feed_row`, `g_and_shift_g_jump_to_first_and_last_entry`, `help_g_and_shift_g_jump_to_top_and_bottom`, `help_shift_j_and_k_page_scroll`
+
 ## [1.3.1] - 2026-04-02
 
 ### Fixed

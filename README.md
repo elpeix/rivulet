@@ -20,7 +20,7 @@ A terminal RSS reader built with Rust and [ratatui](https://github.com/ratatui-o
 - **Mouse support** — Click to select, scroll to navigate
 - **Mark read** — Mark individual entries, all visible, or entire feed as read
 - **Feed renaming** — Custom names with ability to restore the original
-- **Save for later** — Bookmark entries with `s`, filter saved with `g`
+- **Save for later** — Bookmark entries with `s`, filter saved with `b`
 - **Feed auto-discovery** — Paste a website URL and Rivulet finds the RSS/Atom feed automatically
 - **OPML import/export** — Migrate feeds from/to other RSS readers
 - **Auto-refresh** — Configurable periodic refresh (default: 30 min)
@@ -76,7 +76,7 @@ Categories are preserved during import and export.
 | `1` / `2` / `3`     | Jump to Feeds / Entries / Preview                         |
 | `Up` / `Down`       | Move selection                                            |
 | `PgUp` / `PgDn`     | Scroll preview                                            |
-| `Home` / `End`      | Top / bottom                                              |
+| `Home` / `End`      | Top / bottom (also `g` / `G`)                             |
 | `H` / `L`           | Resize focused panel                                      |
 | `w`                 | Toggle layout (columns / split)                           |
 | `Enter`             | Select feed / open entry                                  |
@@ -88,7 +88,7 @@ Categories are preserved during import and export.
 | `d`                 | Delete feed                                               |
 | `r`                 | Refresh all feeds                                         |
 | `f`                 | Toggle unread filter                                      |
-| `g`                 | Toggle saved filter                                       |
+| `b`                 | Toggle saved filter                                       |
 | `c`                 | Assign category                                           |
 | `C`                 | Manage categories                                         |
 | `R`                 | Mark feed as read                                         |

@@ -14,27 +14,27 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
         KeyCode::Char('?') => {
             app.state.show_help = !app.state.show_help;
         }
-        KeyCode::Tab => {
-            if app.state.focus == Focus::Preview && !app.state.preview_links.is_empty() {
-                let next = match app.state.selected_link_index {
-                    Some(i) if i + 1 < app.state.preview_links.len() => i + 1,
-                    Some(_) => 0,
-                    None => 0,
-                };
-                app.state.selected_link_index = Some(next);
-                scroll_to_selected_link(&mut app.state);
-            }
+        KeyCode::Tab
+            if app.state.focus == Focus::Preview && !app.state.preview_links.is_empty() =>
+        {
+            let next = match app.state.selected_link_index {
+                Some(i) if i + 1 < app.state.preview_links.len() => i + 1,
+                Some(_) => 0,
+                None => 0,
+            };
+            app.state.selected_link_index = Some(next);
+            scroll_to_selected_link(&mut app.state);
         }
-        KeyCode::BackTab => {
-            if app.state.focus == Focus::Preview && !app.state.preview_links.is_empty() {
-                let prev = match app.state.selected_link_index {
-                    Some(0) => app.state.preview_links.len() - 1,
-                    Some(i) => i - 1,
-                    None => app.state.preview_links.len() - 1,
-                };
-                app.state.selected_link_index = Some(prev);
-                scroll_to_selected_link(&mut app.state);
-            }
+        KeyCode::BackTab
+            if app.state.focus == Focus::Preview && !app.state.preview_links.is_empty() =>
+        {
+            let prev = match app.state.selected_link_index {
+                Some(0) => app.state.preview_links.len() - 1,
+                Some(i) => i - 1,
+                None => app.state.preview_links.len() - 1,
+            };
+            app.state.selected_link_index = Some(prev);
+            scroll_to_selected_link(&mut app.state);
         }
         KeyCode::Char('1') => {
             let _ = app.dispatch(Action::FocusFeeds);
@@ -92,11 +92,17 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
         KeyCode::PageDown | KeyCode::Char('J') => {
             let _ = app.dispatch(Action::PageDown);
         }
-        KeyCode::Home => {
+        KeyCode::Home | KeyCode::Char('g') => {
             let _ = app.dispatch(Action::ScrollTop);
+            if app.state.focus == Focus::Feeds {
+                dispatch_load_entries(app);
+            }
         }
-        KeyCode::End => {
+        KeyCode::End | KeyCode::Char('G') => {
             let _ = app.dispatch(Action::ScrollBottom);
+            if app.state.focus == Focus::Feeds {
+                dispatch_load_entries(app);
+            }
         }
         KeyCode::Enter => match app.state.focus {
             Focus::Feeds => {
@@ -140,7 +146,7 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
             let _ = app.dispatch(Action::ToggleUnreadFilter);
             dispatch_load_entries(app);
         }
-        KeyCode::Char('g') => {
+        KeyCode::Char('b') => {
             let _ = app.dispatch(Action::ToggleSavedFilter);
             dispatch_load_entries(app);
         }
@@ -241,13 +247,13 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
                 let _ = app.dispatch(Action::MarkAllRead(unread_ids));
             }
         }
-        KeyCode::Char('x') => {
+        KeyCode::Char('x')
             // Clear read entries from the visible list (without reloading from DB)
-            if app.state.focus == Focus::Entries && app.state.unread_only {
-                app.state.entries.retain(|e| e.read_at.is_none());
-                app.state.rebuild_entry_index();
-                app.state.fixup_entry_selection();
-            }
+            if app.state.focus == Focus::Entries && app.state.unread_only =>
+        {
+            app.state.entries.retain(|e| e.read_at.is_none());
+            app.state.rebuild_entry_index();
+            app.state.fixup_entry_selection();
         }
         KeyCode::F(5) => {
             // Full reload of entries from DB (non-merge)
@@ -266,49 +272,45 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
             )));
             dispatch_load_entries(app);
         }
-        KeyCode::Char('R') => {
-            if app.state.focus == Focus::Feeds {
-                if let Some(feed_id) = app.state.selected_feed {
-                    let _ = app.dispatch(Action::MarkFeedRead(feed_id));
-                    let timestamp = now_timestamp();
-                    for entry in &mut app.state.entries {
-                        if entry.feed_id == feed_id && entry.read_at.is_none() {
-                            entry.read_at = Some(timestamp);
-                        }
+        KeyCode::Char('R') if app.state.focus == Focus::Feeds => {
+            if let Some(feed_id) = app.state.selected_feed {
+                let _ = app.dispatch(Action::MarkFeedRead(feed_id));
+                let timestamp = now_timestamp();
+                for entry in &mut app.state.entries {
+                    if entry.feed_id == feed_id && entry.read_at.is_none() {
+                        entry.read_at = Some(timestamp);
                     }
-                    let _ = app.dispatch(Action::RefreshUnreadCounts);
-                    dispatch_load_entries(app);
                 }
+                let _ = app.dispatch(Action::RefreshUnreadCounts);
+                dispatch_load_entries(app);
             }
         }
-        KeyCode::Char('n') => {
-            if app.state.focus == Focus::Preview && !app.state.preview_match_lines.is_empty() {
-                let next = match app.state.preview_match_current {
-                    Some(i) if i + 1 < app.state.preview_match_lines.len() => i + 1,
-                    _ => 0,
-                };
-                app.state.preview_match_current = Some(next);
-                if let Some(&line) = app.state.preview_match_lines.get(next) {
-                    app.state.preview_scroll = line as u16;
-                }
+        KeyCode::Char('n')
+            if app.state.focus == Focus::Preview && !app.state.preview_match_lines.is_empty() =>
+        {
+            let next = match app.state.preview_match_current {
+                Some(i) if i + 1 < app.state.preview_match_lines.len() => i + 1,
+                _ => 0,
+            };
+            app.state.preview_match_current = Some(next);
+            if let Some(&line) = app.state.preview_match_lines.get(next) {
+                app.state.preview_scroll = line as u16;
             }
         }
-        KeyCode::Char('N') => {
-            if app.state.focus == Focus::Preview && !app.state.preview_match_lines.is_empty() {
-                let prev = match app.state.preview_match_current {
-                    Some(0) | None => app.state.preview_match_lines.len() - 1,
-                    Some(i) => i - 1,
-                };
-                app.state.preview_match_current = Some(prev);
-                if let Some(&line) = app.state.preview_match_lines.get(prev) {
-                    app.state.preview_scroll = line as u16;
-                }
+        KeyCode::Char('N')
+            if app.state.focus == Focus::Preview && !app.state.preview_match_lines.is_empty() =>
+        {
+            let prev = match app.state.preview_match_current {
+                Some(0) | None => app.state.preview_match_lines.len() - 1,
+                Some(i) => i - 1,
+            };
+            app.state.preview_match_current = Some(prev);
+            if let Some(&line) = app.state.preview_match_lines.get(prev) {
+                app.state.preview_scroll = line as u16;
             }
         }
-        KeyCode::Char('y') => {
-            if app.state.focus == Focus::Preview {
-                copy_preview_to_clipboard(app);
-            }
+        KeyCode::Char('y') if app.state.focus == Focus::Preview => {
+            copy_preview_to_clipboard(app);
         }
         KeyCode::Char('o') => {
             open_selected_link_or_entry(app);
@@ -372,12 +374,10 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
             app.state.input_buffer.clear();
             let _ = app.dispatch(Action::SetStatus(app.lang.add_feed_prompt.to_string()));
         }
-        KeyCode::Char('c') => {
-            if app.state.selected_feed.is_some() {
-                app.state.input_mode = InputMode::AssignGroup;
-                app.state.input_buffer.clear();
-                let _ = app.dispatch(Action::SetStatus(app.lang.assign_group_prompt.to_string()));
-            }
+        KeyCode::Char('c') if app.state.selected_feed.is_some() => {
+            app.state.input_mode = InputMode::AssignGroup;
+            app.state.input_buffer.clear();
+            let _ = app.dispatch(Action::SetStatus(app.lang.assign_group_prompt.to_string()));
         }
         KeyCode::Char('C') => {
             app.state.input_mode = InputMode::ManageGroups;
@@ -570,6 +570,16 @@ mod tests {
     }
 
     #[test]
+    fn b_toggles_saved_filter() {
+        let mut app = test_app();
+        let before = app.state.saved_only;
+        handle_key(&mut app, key(KeyCode::Char('b')));
+        assert_ne!(app.state.saved_only, before);
+        handle_key(&mut app, key(KeyCode::Char('b')));
+        assert_eq!(app.state.saved_only, before);
+    }
+
+    #[test]
     fn navigation_up_down() {
         let mut app = test_app();
         app.state.feeds = vec![
@@ -603,6 +613,68 @@ mod tests {
 
         handle_key(&mut app, key(KeyCode::Up));
         assert_eq!(app.state.selected_feed_row_index, Some(0));
+    }
+
+    #[test]
+    fn g_and_shift_g_jump_to_first_and_last_feed_row() {
+        let mut app = test_app();
+        app.state.feeds = vec![
+            Feed {
+                id: 1,
+                title: Some("A".to_string()),
+                custom_title: None,
+                url: "https://a.com".to_string(),
+                etag: None,
+                last_modified: None,
+                last_checked_at: None,
+                group_id: None,
+            },
+            Feed {
+                id: 2,
+                title: Some("B".to_string()),
+                custom_title: None,
+                url: "https://b.com".to_string(),
+                etag: None,
+                last_modified: None,
+                last_checked_at: None,
+                group_id: None,
+            },
+        ];
+        app.state.rebuild_feed_rows();
+        let last_row = app.state.feed_rows.len() - 1;
+        app.state.selected_feed_row_index = Some(0);
+        app.state.focus = Focus::Feeds;
+
+        handle_key(&mut app, key(KeyCode::Char('G')));
+        assert_eq!(app.state.selected_feed_row_index, Some(last_row));
+
+        handle_key(&mut app, key(KeyCode::Char('g')));
+        assert_eq!(app.state.selected_feed_row_index, Some(0));
+
+        // Home/End behave the same
+        handle_key(&mut app, key(KeyCode::End));
+        assert_eq!(app.state.selected_feed_row_index, Some(last_row));
+        handle_key(&mut app, key(KeyCode::Home));
+        assert_eq!(app.state.selected_feed_row_index, Some(0));
+    }
+
+    #[test]
+    fn g_and_shift_g_jump_to_first_and_last_entry() {
+        let mut app = app_with_entries();
+
+        handle_key(&mut app, key(KeyCode::Char('G')));
+        assert_eq!(app.state.selected_entry, Some(12));
+        assert_eq!(app.state.selected_entry_index, Some(2));
+
+        handle_key(&mut app, key(KeyCode::Char('g')));
+        assert_eq!(app.state.selected_entry, Some(10));
+        assert_eq!(app.state.selected_entry_index, Some(0));
+
+        // Home/End behave the same
+        handle_key(&mut app, key(KeyCode::End));
+        assert_eq!(app.state.selected_entry, Some(12));
+        handle_key(&mut app, key(KeyCode::Home));
+        assert_eq!(app.state.selected_entry, Some(10));
     }
 
     #[test]
