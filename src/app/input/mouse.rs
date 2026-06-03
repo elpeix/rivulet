@@ -34,7 +34,9 @@ pub fn handle_mouse(app: &mut App, event: MouseEvent, area: ratatui::layout::Rec
         MouseEventKind::Down(MouseButton::Left) => {
             if contains(layout.feeds, x, y) {
                 let _ = app.dispatch(Action::FocusFeeds);
-                if let Some(row_idx) = list_index(x, y, layout.feeds, 1) {
+                if let Some(row_idx) =
+                    list_index(x, y, layout.feeds, 1, app.state.feeds_list_offset)
+                {
                     if let Some(row) = app.state.feed_rows.get(row_idx) {
                         match row {
                             FeedRow::AllFeeds => {
@@ -86,7 +88,8 @@ pub fn handle_mouse(app: &mut App, event: MouseEvent, area: ratatui::layout::Rec
 
             if contains(layout.entries, x, y) {
                 let _ = app.dispatch(Action::FocusEntries);
-                if let Some(index) = list_index(x, y, layout.entries, 1)
+                if let Some(index) =
+                    list_index(x, y, layout.entries, 1, app.state.entries_list_offset)
                     && let Some(entry_id) = app.state.entries.get(index).map(|entry| entry.id)
                 {
                     app.state.reduce(Action::SelectEntry(Some(entry_id)));
@@ -111,7 +114,13 @@ pub fn handle_mouse(app: &mut App, event: MouseEvent, area: ratatui::layout::Rec
             }
         }
         MouseEventKind::ScrollUp => {
-            if contains(layout.entries, x, y) {
+            if contains(layout.feeds, x, y) {
+                let _ = app.dispatch(Action::FocusFeeds);
+                for _ in 0..3 {
+                    let _ = app.dispatch(Action::MoveUp);
+                }
+                super::dispatch_load_entries(app);
+            } else if contains(layout.entries, x, y) {
                 let _ = app.dispatch(Action::FocusEntries);
                 for _ in 0..3 {
                     let _ = app.dispatch(Action::MoveUp);
@@ -124,7 +133,13 @@ pub fn handle_mouse(app: &mut App, event: MouseEvent, area: ratatui::layout::Rec
             }
         }
         MouseEventKind::ScrollDown => {
-            if contains(layout.entries, x, y) {
+            if contains(layout.feeds, x, y) {
+                let _ = app.dispatch(Action::FocusFeeds);
+                for _ in 0..3 {
+                    let _ = app.dispatch(Action::MoveDown);
+                }
+                super::dispatch_load_entries(app);
+            } else if contains(layout.entries, x, y) {
                 let _ = app.dispatch(Action::FocusEntries);
                 for _ in 0..3 {
                     let _ = app.dispatch(Action::MoveDown);
@@ -147,7 +162,13 @@ fn contains(area: ratatui::layout::Rect, x: u16, y: u16) -> bool {
         && y < area.y.saturating_add(area.height)
 }
 
-fn list_index(x: u16, y: u16, panel: ratatui::layout::Rect, row_height: u16) -> Option<usize> {
+fn list_index(
+    x: u16,
+    y: u16,
+    panel: ratatui::layout::Rect,
+    row_height: u16,
+    scroll_offset: usize,
+) -> Option<usize> {
     let inner = ratatui::layout::Rect {
         x: panel.x.saturating_add(1),
         y: panel.y.saturating_add(1),
@@ -167,7 +188,7 @@ fn list_index(x: u16, y: u16, panel: ratatui::layout::Rect, row_height: u16) -> 
     }
 
     let offset = y.saturating_sub(list_area.y);
-    Some((offset / row_height) as usize)
+    Some((offset / row_height) as usize + scroll_offset)
 }
 
 fn hit_test_link(app: &App, x: u16, y: u16) -> Option<String> {
@@ -217,38 +238,47 @@ mod tests {
         // Panel at (0,0) 20x20. Inner = (1,1) 18x18. List area = (1,3) 18x16.
         let panel = Rect::new(0, 0, 20, 20);
         // Click at row 5, which is offset 2 from list_area.y=3
-        assert_eq!(list_index(5, 5, panel, 1), Some(2));
+        assert_eq!(list_index(5, 5, panel, 1, 0), Some(2));
     }
 
     #[test]
     fn list_index_first_row() {
         let panel = Rect::new(0, 0, 20, 20);
         // First row of list area is y=3 (panel.y+1+2)
-        assert_eq!(list_index(5, 3, panel, 1), Some(0));
+        assert_eq!(list_index(5, 3, panel, 1, 0), Some(0));
     }
 
     #[test]
     fn list_index_outside_panel() {
         let panel = Rect::new(10, 10, 20, 20);
         // Click outside panel
-        assert_eq!(list_index(5, 5, panel, 1), None);
+        assert_eq!(list_index(5, 5, panel, 1, 0), None);
     }
 
     #[test]
     fn list_index_in_header_area() {
         let panel = Rect::new(0, 0, 20, 20);
         // y=1 is in the inner area but above the list area (header/separator)
-        assert_eq!(list_index(5, 1, panel, 1), None);
-        assert_eq!(list_index(5, 2, panel, 1), None);
+        assert_eq!(list_index(5, 1, panel, 1, 0), None);
+        assert_eq!(list_index(5, 2, panel, 1, 0), None);
     }
 
     #[test]
     fn list_index_with_row_height_2() {
         let panel = Rect::new(0, 0, 20, 20);
         // list_area.y = 3, row_height = 2
-        assert_eq!(list_index(5, 3, panel, 2), Some(0));
-        assert_eq!(list_index(5, 4, panel, 2), Some(0));
-        assert_eq!(list_index(5, 5, panel, 2), Some(1));
+        assert_eq!(list_index(5, 3, panel, 2, 0), Some(0));
+        assert_eq!(list_index(5, 4, panel, 2, 0), Some(0));
+        assert_eq!(list_index(5, 5, panel, 2, 0), Some(1));
+    }
+
+    #[test]
+    fn list_index_accounts_for_scroll_offset() {
+        let panel = Rect::new(0, 0, 20, 20);
+        // First visible row of the list maps to the scrolled item, not item 0.
+        assert_eq!(list_index(5, 3, panel, 1, 10), Some(10));
+        // Third visible row (offset 2) with scroll 10 -> item 12.
+        assert_eq!(list_index(5, 5, panel, 1, 10), Some(12));
     }
 
     #[test]

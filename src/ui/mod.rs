@@ -89,13 +89,14 @@ pub fn draw(
 
 fn draw_feeds_panel(
     frame: &mut Frame<'_>,
-    state: &AppState,
+    state: &mut AppState,
     theme: &Theme,
     area: Rect,
     lang: &Lang,
 ) {
     let mut feed_state = ListState::default();
     feed_state.select(state.selected_feed_row_index);
+    *feed_state.offset_mut() = state.feeds_list_offset;
     let focused = state.focus == crate::app::state::Focus::Feeds;
     let searching = state.input_mode == crate::app::state::InputMode::PanelSearch
         && state.panel_search_focus == Some(crate::app::state::Focus::Feeds);
@@ -123,6 +124,7 @@ fn draw_feeds_panel(
     render_separator(frame, theme, split[1]);
     let feeds = feeds_list(state, theme, split[2].width, lang);
     frame.render_stateful_widget(feeds, split[2], &mut feed_state);
+    state.feeds_list_offset = feed_state.offset();
     if searching || has_filter {
         let query = state.feed_filter_query.as_deref().unwrap_or("");
         render_search_bar(frame, theme, split[3], query, searching, None);
@@ -131,13 +133,14 @@ fn draw_feeds_panel(
 
 fn draw_entries_panel(
     frame: &mut Frame<'_>,
-    state: &AppState,
+    state: &mut AppState,
     theme: &Theme,
     area: Rect,
     lang: &Lang,
 ) {
     let mut entry_state = ListState::default();
     entry_state.select(state.selected_entry_index);
+    *entry_state.offset_mut() = state.entries_list_offset;
     let focused = state.focus == crate::app::state::Focus::Entries;
     let searching = state.input_mode == crate::app::state::InputMode::PanelSearch
         && state.panel_search_focus == Some(crate::app::state::Focus::Entries);
@@ -195,6 +198,7 @@ fn draw_entries_panel(
         state.search_query.as_deref(),
     );
     frame.render_stateful_widget(entries, list_area, &mut entry_state);
+    state.entries_list_offset = entry_state.offset();
 
     if has_scrollbar {
         let scrollbar_area = Rect {

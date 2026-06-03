@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.4.1] - 2026-06-03
+
+### Fixed
+
+- **Mouse clicks on scrolled lists select the wrong item**: When the Feeds or Entries list was scrolled (or navigated to the bottom), clicking a row selected the item at that screen position as if the list were not scrolled, instead of the visible item under the cursor
+- **Mouse wheel does not scroll the Feeds list**: The scroll-wheel handler only acted on the Entries and Preview panels; scrolling over the Feeds panel now moves the feed selection and loads its entries, matching keyboard navigation
+
+### Internal
+
+- `AppState` persists the rendered scroll offset of the Feeds and Entries lists (`feeds_list_offset`, `entries_list_offset`); mouse hit-testing adds this offset when mapping a screen row to a list index
+- New test: `list_index_accounts_for_scroll_offset`
+
 ## [1.4.0] - 2026-04-30
 
 ### Added
