@@ -124,6 +124,11 @@ pub struct AppState {
     pub selected_link_index: Option<usize>,
     pub preview_link_regions: Vec<LinkRegion>,
     pub preview_body_area: Rect,
+    /// Scroll offset (first visible row index) of the feeds list, persisted
+    /// after each render so mouse clicks can map screen rows to feed rows.
+    pub feeds_list_offset: usize,
+    /// Scroll offset (first visible row index) of the entries list.
+    pub entries_list_offset: usize,
     pub sort_mode: SortMode,
     pub hide_read_feeds: bool,
     pub input_mode: InputMode,
@@ -189,6 +194,8 @@ impl Default for AppState {
             selected_link_index: None,
             preview_link_regions: Vec::new(),
             preview_body_area: Rect::default(),
+            feeds_list_offset: 0,
+            entries_list_offset: 0,
             sort_mode: SortMode::DateDesc,
             hide_read_feeds: false,
             input_mode: InputMode::None,
