@@ -2,25 +2,25 @@ class Rivulet < Formula
   desc "A terminal RSS reader with 3-panel layout, categories, rich preview, and OPML support"
   homepage "https://github.com/elpeix/rivulet"
   license "GPL-3.0-only"
-  version "1.4.0"
+  version "1.4.1"
 
   on_macos do
     if Hardware::CPU.arm?
       url "https://github.com/elpeix/rivulet/releases/download/v#{version}/rivulet-v#{version}-aarch64-apple-darwin.tar.gz"
-      sha256 "03b04d0cb0cad03c865706f5c91066bf8943f75710cbea189ce7f7b907211436"
+      sha256 "6702f4cae69fdd6af171a583d22fac31777b9a417abf0ab060248b33a05bb048"
     else
       url "https://github.com/elpeix/rivulet/releases/download/v#{version}/rivulet-v#{version}-x86_64-apple-darwin.tar.gz"
-      sha256 "4a744c9348713f39d1e20531fcef7cdf83c082b76189bd69168f747a3e2da4e0"
+      sha256 "878eceb85e81cd38c023dabee57703ec4af6d29923c04f3d4f78f1a560a6de76"
     end
   end
 
   on_linux do
     if Hardware::CPU.arm?
       url "https://github.com/elpeix/rivulet/releases/download/v#{version}/rivulet-v#{version}-aarch64-linux-gnu.tar.gz"
-      sha256 "68dd3845b44965ff23a34593f27248a50b674073f8023abe0231df6f2d7a9968"
+      sha256 "8b63d52e47ad94603bcfa04cfba8c85c2b9332fc05d3b97347bf854dcec28dac"
     else
       url "https://github.com/elpeix/rivulet/releases/download/v#{version}/rivulet-v#{version}-x86_64-linux-gnu.tar.gz"
-      sha256 "ff7b521f2b1f4dd44b1abf14cd47f756b66bd1c605527ed76cc8af23ad541c68"
+      sha256 "58389f37856666521519e8982553e1c759c2ce896bb0263834e809ab49e15cff"
     end
   end
 
