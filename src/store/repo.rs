@@ -84,7 +84,7 @@ impl Repo {
     pub fn get_feed(&self, feed_id: i64) -> Result<Option<Feed>> {
         self.conn
             .query_row(
-                "SELECT id, title, custom_title, url, etag, last_modified, last_checked_at, group_id FROM feeds WHERE id = ?1;",
+                "SELECT id, title, custom_title, url, etag, last_modified, last_checked_at, group_id, bypass_cache FROM feeds WHERE id = ?1;",
                 params![feed_id],
                 map_feed_row,
             )
@@ -93,7 +93,7 @@ impl Repo {
 
     pub fn list_feeds(&self) -> Result<Vec<Feed>> {
         let mut stmt = self.conn.prepare(
-            "SELECT f.id, f.title, f.custom_title, f.url, f.etag, f.last_modified, f.last_checked_at, f.group_id
+            "SELECT f.id, f.title, f.custom_title, f.url, f.etag, f.last_modified, f.last_checked_at, f.group_id, f.bypass_cache
              FROM feeds f
              LEFT JOIN groups g ON g.id = f.group_id
              ORDER BY COALESCE(g.position, 999999), g.name, LOWER(COALESCE(f.custom_title, f.title));",
@@ -190,6 +190,14 @@ impl Repo {
         self.conn.execute(
             "UPDATE feeds SET group_id = ?1 WHERE id = ?2;",
             params![group_id, feed_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn set_feed_bypass_cache(&self, feed_id: i64, bypass: bool) -> Result<()> {
+        self.conn.execute(
+            "UPDATE feeds SET bypass_cache = ?1 WHERE id = ?2;",
+            params![bypass, feed_id],
         )?;
         Ok(())
     }
@@ -566,6 +574,7 @@ fn map_feed_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Feed> {
         last_modified: row.get(5)?,
         last_checked_at: row.get(6)?,
         group_id: row.get(7)?,
+        bypass_cache: row.get(8)?,
     })
 }
 
@@ -668,6 +677,22 @@ mod tests {
         assert_eq!(feeds.len(), 1);
         assert_eq!(feeds[0].id, feed.id);
         assert_eq!(feeds[0].url, "https://example.com/rss");
+    }
+
+    #[test]
+    fn set_feed_bypass_cache_persists() {
+        let repo = test_repo();
+        let feed = repo
+            .create_feed(&sample_feed("https://example.com/rss"))
+            .unwrap();
+        assert!(!feed.bypass_cache);
+
+        repo.set_feed_bypass_cache(feed.id, true).unwrap();
+        assert!(repo.get_feed(feed.id).unwrap().unwrap().bypass_cache);
+        assert!(repo.list_feeds().unwrap()[0].bypass_cache);
+
+        repo.set_feed_bypass_cache(feed.id, false).unwrap();
+        assert!(!repo.get_feed(feed.id).unwrap().unwrap().bypass_cache);
     }
 
     #[test]

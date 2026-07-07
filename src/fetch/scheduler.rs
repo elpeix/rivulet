@@ -10,6 +10,7 @@ pub struct FetchJob {
     pub feed_id: i64,
     pub url: String,
     pub cache: Option<CacheState>,
+    pub bypass_cache: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -68,8 +69,11 @@ impl Scheduler {
                     return (job, Err(error));
                 }
 
+                let bypass_headers = [("Cookie", "no_cache=1")];
+                let extra_headers: Option<&[(&str, &str)]> =
+                    job.bypass_cache.then_some(&bypass_headers[..]);
                 match client
-                    .fetch(job.url.as_str(), job.cache.as_ref(), None)
+                    .fetch(job.url.as_str(), job.cache.as_ref(), extra_headers)
                     .await
                     .map_err(SchedulerError::from)
                 {
@@ -126,11 +130,13 @@ mod tests {
                 feed_id: 1,
                 url: "http://invalid.test.localhost/feed.xml".to_string(),
                 cache: None,
+                bypass_cache: false,
             },
             FetchJob {
                 feed_id: 2,
                 url: "http://invalid.test.localhost/other.xml".to_string(),
                 cache: None,
+                bypass_cache: false,
             },
         ];
 
@@ -155,6 +161,7 @@ mod tests {
             feed_id: 1,
             url: "http://example.com".to_string(),
             cache: None,
+            bypass_cache: false,
         };
         let response = FetchResponse {
             body: Some(bytes::Bytes::from("hello")),

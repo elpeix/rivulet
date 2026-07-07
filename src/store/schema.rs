@@ -1,6 +1,6 @@
 use rusqlite::{Connection, Result};
 
-const SCHEMA_VERSION: i64 = 4;
+const SCHEMA_VERSION: i64 = 5;
 
 const MIGRATION_1: &str = r"
 CREATE TABLE IF NOT EXISTS feeds (
@@ -63,7 +63,17 @@ const MIGRATION_4: &str = r"
 ALTER TABLE feeds ADD COLUMN custom_title TEXT;
 ";
 
-const MIGRATIONS: &[&str] = &[MIGRATION_1, MIGRATION_2, MIGRATION_3, MIGRATION_4];
+const MIGRATION_5: &str = r"
+ALTER TABLE feeds ADD COLUMN bypass_cache INTEGER NOT NULL DEFAULT 0;
+";
+
+const MIGRATIONS: &[&str] = &[
+    MIGRATION_1,
+    MIGRATION_2,
+    MIGRATION_3,
+    MIGRATION_4,
+    MIGRATION_5,
+];
 const _: () = assert!(MIGRATIONS.len() as i64 == SCHEMA_VERSION);
 
 pub fn apply_migrations(conn: &Connection) -> Result<()> {

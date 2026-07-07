@@ -485,6 +485,7 @@ impl AppState {
             | Action::AddFeed { .. }
             | Action::DeleteFeed(_)
             | Action::RenameFeed { .. }
+            | Action::SetFeedBypassCache { .. }
             | Action::MarkRead(_)
             | Action::MarkUnread(_)
             | Action::MarkAllRead(_)
@@ -865,6 +866,7 @@ mod tests {
             last_modified: None,
             last_checked_at: None,
             group_id,
+            bypass_cache: false,
         }
     }
 

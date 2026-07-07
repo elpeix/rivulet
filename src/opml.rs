@@ -197,6 +197,7 @@ mod tests {
                 last_modified: None,
                 last_checked_at: None,
                 group_id: Some(1),
+                bypass_cache: false,
             },
             Feed {
                 id: 2,
@@ -207,6 +208,7 @@ mod tests {
                 last_modified: None,
                 last_checked_at: None,
                 group_id: None,
+                bypass_cache: false,
             },
         ];
 

@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.5.0] - 2026-07-07
+
+### Added
+
+- **Per-feed cache bypass**: Toggle with `B` in the Feeds panel to mark a feed whose fetches should skip intermediary caches. Some servers (e.g. WordPress behind a misconfigured Nginx reverse-proxy cache) serve stale content to cookieless clients while returning `x-cache-status: UPDATING`, so the feed appears frozen days behind. Marked feeds send a bypass cookie that forces the origin to return fresh content. Off by default, so all other feeds keep using conditional GET (`ETag` / `If-Modified-Since`) and stay cache-friendly. The Feed info modal (`i`) shows whether bypass is enabled
+
+### Internal
+
+- Schema migration v5: `feeds.bypass_cache` column (`INTEGER NOT NULL DEFAULT 0`)
+- `Feed.bypass_cache` field; `Repo::set_feed_bypass_cache`; `FetchJob.bypass_cache` gates the bypass cookie in the scheduler
+- `Action::SetFeedBypassCache` / `DbCommand::SetFeedBypassCache`; new i18n strings (`bypass_cache_enabled`, `bypass_cache_disabled`, `help_toggle_bypass`) in English and Catalan
+- New test: `set_feed_bypass_cache_persists`
+
+> **Downgrade note**: Running this version migrates the database to schema v5. Earlier versions (≤ 1.4.1) only support schema v4 and will refuse to start against a v5 database with `Database schema v5 is newer than supported v4`. The migration is additive and non-destructive (a single new column with a default), so to roll back you can remove the v5 marker with `DELETE FROM schema_version WHERE version = 5;` on the database file before launching the older version. See [Database & version compatibility](README.md#database--version-compatibility).
+
 ## [1.4.1] - 2026-06-03
 
 ### Fixed
