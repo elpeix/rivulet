@@ -43,6 +43,10 @@ pub enum Action {
         id: i64,
         title: Option<String>,
     },
+    SetFeedBypassCache {
+        feed_id: i64,
+        bypass: bool,
+    },
     MarkRead(i64),
     MarkUnread(i64),
     MarkAllRead(Vec<i64>),

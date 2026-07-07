@@ -117,6 +117,10 @@ impl App {
                 self.send_and_handle(DbCommand::RenameFeed { id, title })?;
                 self.send_and_handle(DbCommand::ListFeeds)?;
             }
+            Action::SetFeedBypassCache { feed_id, bypass } => {
+                self.send_and_handle(DbCommand::SetFeedBypassCache { feed_id, bypass })?;
+                self.send_and_handle(DbCommand::ListFeeds)?;
+            }
             Action::DeleteFeed(feed_id) => {
                 self.send_and_handle(DbCommand::DeleteFeed(feed_id))?;
                 self.send_and_handle(DbCommand::ListFeeds)?;
@@ -556,6 +560,7 @@ impl App {
                     etag: feed.etag.clone(),
                     last_modified: feed.last_modified.clone(),
                 }),
+                bypass_cache: feed.bypass_cache,
             })
             .collect();
 

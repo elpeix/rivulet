@@ -520,6 +520,7 @@ pub fn current_modal(state: &AppState, lang: &Lang) -> Option<ui::Modal> {
                 Some(ui::Modal::FeedInfo {
                     title,
                     url: feed.url.clone(),
+                    bypass_cache: feed.bypass_cache,
                 })
             } else {
                 None

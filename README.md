@@ -24,6 +24,7 @@ A terminal RSS reader built with Rust and [ratatui](https://github.com/ratatui-o
 - **Feed auto-discovery** — Paste a website URL and Rivulet finds the RSS/Atom feed automatically
 - **OPML import/export** — Migrate feeds from/to other RSS readers
 - **Auto-refresh** — Configurable periodic refresh (default: 30 min)
+- **Per-feed cache bypass** — Toggle with `B` to force a fresh fetch from feeds served stale by a misconfigured proxy cache
 - **Themes** — Terminal-adaptive (default), dark, light, and custom themes
 - **i18n** — English and Catalan
 - **Local SQLite storage** — No external services required
@@ -93,9 +94,10 @@ Categories are preserved during import and export.
 | `C`                 | Manage categories                                         |
 | `R`                 | Mark feed as read                                         |
 | `S`                 | Cycle sort mode                                           |
-| `i`                 | Feed info (name and URL)                                  |
+| `i`                 | Feed info (name, URL, cache bypass)                       |
 | `.`                 | Hide/show read feeds                                      |
 | `t`                 | Toggle time filter                                        |
+| `B`                 | Toggle cache bypass for feed                              |
 | **Entries**         |                                                           |
 | `m`                 | Toggle read/unread                                        |
 | `M`                 | Mark all visible as read                                  |
@@ -151,6 +153,26 @@ accent_alt = "#d79921"
 ```
 
 Then set `theme = "gruvbox"` in `config.toml`. If the file is missing or has errors, Rivulet falls back to the built-in dark theme.
+
+## Database & version compatibility
+
+Rivulet stores everything in a local SQLite database and tracks its structure with a schema version. On startup it applies any pending migrations to bring the database up to the version the running binary expects.
+
+**Upgrades are automatic.** **Downgrades are not.** Each release may raise the schema version; once a newer version has opened the database, an older binary will refuse to start against it, reporting:
+
+```
+Database schema vN is newer than supported vM
+```
+
+This is a deliberate guard to avoid a binary operating on a structure it does not understand. Migrations are additive and non-destructive (new columns/tables with defaults), so no data is lost — the older version is simply blocked by the version check.
+
+To roll back to an earlier version, remove the newer schema markers before launching the older binary. For example, to go back from schema v5 (1.5.0) to v4 (≤ 1.4.1):
+
+```sh
+sqlite3 ~/.local/share/rivulet/rivulet.db "DELETE FROM schema_version WHERE version = 5;"
+```
+
+Back up the database file first. It lives at `$XDG_DATA_HOME/rivulet/rivulet.db`, defaulting to `~/.local/share/rivulet/rivulet.db`.
 
 ## License
 

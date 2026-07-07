@@ -49,6 +49,7 @@ pub enum Modal {
     FeedInfo {
         title: String,
         url: String,
+        bypass_cache: bool,
     },
     Discovering,
     SelectDiscoveredFeed {
@@ -406,8 +407,12 @@ fn draw_modal(
         Modal::Help { scroll } => {
             draw_help_modal(frame, state, theme, area, scroll, lang);
         }
-        Modal::FeedInfo { title, url } => {
-            let text = Text::from(vec![
+        Modal::FeedInfo {
+            title,
+            url,
+            bypass_cache,
+        } => {
+            let mut lines = vec![
                 Line::from(""),
                 Line::from(vec![
                     Span::styled(format!("{}: ", lang.name_label), theme.dim_style()),
@@ -418,10 +423,17 @@ fn draw_modal(
                     Span::styled(format!("{}: ", lang.url_label), theme.dim_style()),
                     Span::raw(url),
                 ]),
-                Line::from(""),
-                Line::from(Span::styled("Esc", theme.dim_style())),
-            ]);
-            frame.render_widget(modal(&lang.feed_info_title, text, theme), area);
+            ];
+            if bypass_cache {
+                lines.push(Line::from(""));
+                lines.push(Line::from(Span::styled(
+                    lang.bypass_cache_enabled.clone(),
+                    Style::default().fg(theme.accent_alt),
+                )));
+            }
+            lines.push(Line::from(""));
+            lines.push(Line::from(Span::styled("Esc", theme.dim_style())));
+            frame.render_widget(modal(&lang.feed_info_title, Text::from(lines), theme), area);
         }
         Modal::Discovering => {
             let spinner = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
@@ -556,7 +568,7 @@ fn draw_help_modal(
         ),
         row("R", &lang.help_mark_feed_read, "S", &lang.help_cycle_sort),
         row("i", &lang.help_feed_info, ".", &lang.help_toggle_read_feeds),
-        row("t", &lang.help_toggle_time, "", ""),
+        row("t", &lang.help_toggle_time, "B", &lang.help_toggle_bypass),
         Line::from(""),
         heading(&lang.help_entries),
         separator.clone(),

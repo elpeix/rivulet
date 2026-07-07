@@ -285,6 +285,28 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
                 dispatch_load_entries(app);
             }
         }
+        KeyCode::Char('B') if app.state.focus == Focus::Feeds => {
+            if let Some(feed_id) = app.state.selected_feed {
+                let current = app
+                    .state
+                    .feeds
+                    .iter()
+                    .find(|f| f.id == feed_id)
+                    .map(|f| f.bypass_cache);
+                if let Some(current) = current {
+                    let bypass = !current;
+                    let _ = app.dispatch(Action::SetFeedBypassCache { feed_id, bypass });
+                    let status = if bypass {
+                        app.lang.bypass_cache_enabled.clone()
+                    } else {
+                        app.lang.bypass_cache_disabled.clone()
+                    };
+                    let _ = app.dispatch(Action::SetStatus(status));
+                }
+            } else {
+                let _ = app.dispatch(Action::SetStatus(app.lang.no_feed_selected.to_string()));
+            }
+        }
         KeyCode::Char('n')
             if app.state.focus == Focus::Preview && !app.state.preview_match_lines.is_empty() =>
         {
@@ -592,6 +614,7 @@ mod tests {
                 last_modified: None,
                 last_checked_at: None,
                 group_id: None,
+                bypass_cache: false,
             },
             Feed {
                 id: 2,
@@ -602,6 +625,7 @@ mod tests {
                 last_modified: None,
                 last_checked_at: None,
                 group_id: None,
+                bypass_cache: false,
             },
         ];
         app.state.rebuild_feed_rows();
@@ -628,6 +652,7 @@ mod tests {
                 last_modified: None,
                 last_checked_at: None,
                 group_id: None,
+                bypass_cache: false,
             },
             Feed {
                 id: 2,
@@ -638,6 +663,7 @@ mod tests {
                 last_modified: None,
                 last_checked_at: None,
                 group_id: None,
+                bypass_cache: false,
             },
         ];
         app.state.rebuild_feed_rows();

@@ -22,6 +22,7 @@ pub struct Feed {
     pub last_modified: Option<String>,
     pub last_checked_at: Option<i64>,
     pub group_id: Option<i64>,
+    pub bypass_cache: bool,
 }
 
 impl Feed {
