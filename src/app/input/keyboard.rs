@@ -169,6 +169,7 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
                 app.lang.filter_all_time.to_string()
             };
             let _ = app.dispatch(Action::SetStatus(msg));
+            let _ = app.dispatch(Action::RefreshUnreadCounts);
             dispatch_load_entries(app);
         }
         KeyCode::Char('m') => {
@@ -514,6 +515,56 @@ mod tests {
 
     fn key(code: KeyCode) -> KeyEvent {
         KeyEvent::new(code, KeyModifiers::NONE)
+    }
+
+    fn seed_feed_with_recent_and_old_entries(app: &mut crate::app::App) -> i64 {
+        use crate::app::events::DbCommand;
+        use crate::store::models::{NewEntry, NewFeed};
+
+        let _ = app.db.send(DbCommand::CreateFeed(NewFeed {
+            title: Some("Feed A".to_string()),
+            url: "http://a.test/feed.xml".to_string(),
+            created_at: 0,
+        }));
+        let _ = app.dispatch(Action::LoadFeeds);
+        let feed_id = app.state.feeds[0].id;
+
+        let now = now_timestamp();
+        let entry = |guid: &str, published_at: i64| NewEntry {
+            feed_id,
+            guid: guid.to_string(),
+            title: Some(guid.to_string()),
+            url: None,
+            author: None,
+            published_at: Some(published_at),
+            fetched_at: published_at,
+            summary: None,
+            content: None,
+            content_text: None,
+            hash: None,
+        };
+        let _ = app.db.send(DbCommand::UpsertEntries(vec![
+            entry("recent", now - 86400),
+            entry("old", now - 200 * 86400),
+        ]));
+        feed_id
+    }
+
+    #[test]
+    fn toggling_recent_filter_refreshes_unread_counts() {
+        let mut app = test_app();
+        let feed_id = seed_feed_with_recent_and_old_entries(&mut app);
+
+        let _ = app.dispatch(Action::RefreshUnreadCounts);
+        assert!(app.state.recent_only);
+        assert_eq!(app.state.total_unread, 1);
+        assert_eq!(app.state.unread_counts.get(&feed_id).copied(), Some(1));
+
+        handle_key(&mut app, key(KeyCode::Char('t')));
+
+        assert!(!app.state.recent_only);
+        assert_eq!(app.state.total_unread, 2);
+        assert_eq!(app.state.unread_counts.get(&feed_id).copied(), Some(2));
     }
 
     #[test]

@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.5.1] - 2026-08-07
+
+### Fixed
+
+- **Unread counters not recalculated when toggling the time filter (`t`)**: The counters kept the cutoff from before the toggle, so showing older entries listed them all while the feed, group and total counters still only counted the recent-days window
+- **Aggregate unread counters ignored the feeds filter (`/`)**: Group headers, the uncategorized header and the "All feeds" row counted feeds hidden by the filter, so a header's number did not match the feeds listed under it
+- **Groups with no matching feeds stayed visible when filtering (`/`)**: Their headers remained, showing a count for feeds that had all been filtered out
+
+### Internal
+
+- The `t` handler dispatches `RefreshUnreadCounts` so the counters and the entries list always share the same `since` cutoff
+- `AppState::unread_by_group` centralises the per-group unread totals (previously computed in three places, none of which applied the feeds filter) and `AppState::feed_matches_filter` is shared between row filtering and counting so they cannot diverge; `AppState::all_feeds_unread` backs the "All feeds" row. The status bar total stays global
+- Header visibility now depends on whether a group has any visible feed rather than on its unread count being zero, which also covers the previous `hide_read_feeds` behavior
+- New tests: `toggling_recent_filter_refreshes_unread_counts`, `group_header_count_matches_visible_feeds_when_filtering`, `ungrouped_header_count_matches_visible_feeds_when_filtering`, `all_feeds_unread_respects_feed_filter`, `adjust_unread_count_keeps_group_header_filtered`, `filtering_hides_groups_without_matching_feeds`, `filtering_hides_ungrouped_header_without_matching_feeds`, `filtering_keeps_collapsed_group_with_matching_feed`, `empty_group_stays_visible_without_filter`
+
 ## [1.5.0] - 2026-07-07
 
 ### Added
