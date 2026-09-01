@@ -571,42 +571,50 @@ impl AppState {
         self.update_feed_row_counts();
     }
 
+    fn feed_matches_filter(feed: &Feed, lowercase_query: Option<&str>) -> bool {
+        match lowercase_query {
+            Some(query) => feed
+                .display_title()
+                .unwrap_or("")
+                .to_lowercase()
+                .contains(query),
+            None => true,
+        }
+    }
+
+    fn unread_by_group(&self) -> HashMap<Option<i64>, i64> {
+        let query = self.feed_filter_query.as_deref().map(str::to_lowercase);
+        let mut sums: HashMap<Option<i64>, i64> = HashMap::new();
+        for feed in &self.feeds {
+            if !Self::feed_matches_filter(feed, query.as_deref()) {
+                continue;
+            }
+            let unread = self.unread_counts.get(&feed.id).copied().unwrap_or(0);
+            *sums.entry(feed.group_id).or_insert(0) += unread;
+        }
+        sums
+    }
+
+    pub fn all_feeds_unread(&self) -> i64 {
+        if self.feed_filter_query.is_none() {
+            return self.total_unread;
+        }
+        self.unread_by_group().values().sum()
+    }
+
     /// Update unread counters in existing feed rows without changing structure.
     /// Feeds that became empty stay visible until an explicit rebuild.
     fn update_feed_row_counts(&mut self) {
-        let mut feeds_by_group: HashMap<Option<i64>, Vec<usize>> = HashMap::new();
-        for (i, feed) in self.feeds.iter().enumerate() {
-            feeds_by_group.entry(feed.group_id).or_default().push(i);
-        }
+        let sums = self.unread_by_group();
         for row in &mut self.feed_rows {
             match row {
                 FeedRow::GroupHeader {
                     group_id, unread, ..
                 } => {
-                    *unread = feeds_by_group.get(&Some(*group_id)).map_or(0, |indices| {
-                        indices
-                            .iter()
-                            .map(|&i| {
-                                self.feeds
-                                    .get(i)
-                                    .and_then(|f| self.unread_counts.get(&f.id).copied())
-                                    .unwrap_or(0)
-                            })
-                            .sum()
-                    });
+                    *unread = sums.get(&Some(*group_id)).copied().unwrap_or(0);
                 }
                 FeedRow::UngroupedHeader { unread } => {
-                    *unread = feeds_by_group.get(&None).map_or(0, |indices| {
-                        indices
-                            .iter()
-                            .map(|&i| {
-                                self.feeds
-                                    .get(i)
-                                    .and_then(|f| self.unread_counts.get(&f.id).copied())
-                                    .unwrap_or(0)
-                            })
-                            .sum()
-                    });
+                    *unread = sums.get(&None).copied().unwrap_or(0);
                 }
                 FeedRow::AllFeeds | FeedRow::FeedItem { .. } => {}
             }
@@ -665,17 +673,12 @@ impl AppState {
                         return false;
                     }
                 }
-                if let Some(ref q) = feed_query {
-                    let title = feeds
-                        .get(feed_index)
-                        .and_then(|f| f.display_title())
-                        .unwrap_or("");
-                    if !title.to_lowercase().contains(q) {
-                        return false;
-                    }
+                match feeds.get(feed_index) {
+                    Some(feed) => Self::feed_matches_filter(feed, feed_query.as_deref()),
+                    None => false,
                 }
-                true
             };
+        let unread_by_group = self.unread_by_group();
 
         if self.groups.is_empty() {
             // No groups: flat list
@@ -702,22 +705,21 @@ impl AppState {
             feeds_by_group.entry(feed.group_id).or_default().push(i);
         }
 
+        // A group with no feeds at all stays visible unless a filter is narrowing the list
+        let filtering = hiding || feed_query.is_some();
+        let has_visible_feeds = |indices: Option<&Vec<usize>>, feeds: &[Feed]| -> bool {
+            indices.is_some_and(|indices| {
+                indices
+                    .iter()
+                    .any(|&i| feed_visible(i, feeds, &self.unread_counts))
+            })
+        };
+
         // Grouped mode
         for group in &self.groups {
             let group_feeds = feeds_by_group.get(&Some(group.id));
-            let unread: i64 = group_feeds.map_or(0, |indices| {
-                indices
-                    .iter()
-                    .map(|&i| {
-                        self.unread_counts
-                            .get(&self.feeds[i].id)
-                            .copied()
-                            .unwrap_or(0)
-                    })
-                    .sum()
-            });
-            // Hide empty groups when hiding empty feeds
-            if hiding && unread == 0 {
+            let unread = unread_by_group.get(&Some(group.id)).copied().unwrap_or(0);
+            if filtering && !has_visible_feeds(group_feeds, &self.feeds) {
                 continue;
             }
             self.feed_rows.push(FeedRow::GroupHeader {
@@ -738,16 +740,8 @@ impl AppState {
 
         // Ungrouped feeds
         if let Some(ungrouped) = feeds_by_group.get(&None) {
-            let unread: i64 = ungrouped
-                .iter()
-                .map(|&i| {
-                    self.unread_counts
-                        .get(&self.feeds[i].id)
-                        .copied()
-                        .unwrap_or(0)
-                })
-                .sum();
-            if !hiding || unread > 0 {
+            let unread = unread_by_group.get(&None).copied().unwrap_or(0);
+            if !filtering || has_visible_feeds(Some(ungrouped), &self.feeds) {
                 self.feed_rows.push(FeedRow::UngroupedHeader { unread });
                 for &fi in ungrouped {
                     if feed_visible(fi, &self.feeds, &self.unread_counts) {
@@ -1166,6 +1160,212 @@ mod tests {
         state.feed_filter_query = None;
         state.rebuild_feed_rows();
         assert_eq!(state.feed_rows.len(), 4);
+    }
+
+    #[test]
+    fn group_header_count_matches_visible_feeds_when_filtering() {
+        let mut state = AppState::default();
+        state.groups = vec![Group {
+            id: 1,
+            name: "Dev".to_string(),
+            position: 0,
+        }];
+        state.reduce(Action::FeedsLoaded(vec![
+            sample_feed(1, "Rust Blog", Some(1)),
+            sample_feed(2, "Go Weekly", Some(1)),
+        ]));
+        state.reduce(Action::UpdateUnreadCounts(vec![(1, 5), (2, 3)]));
+        state.flush_feed_rows();
+        assert!(
+            matches!(state.feed_rows[1], FeedRow::GroupHeader { unread, .. } if unread == 8),
+            "unfiltered group header should sum all feeds"
+        );
+
+        state.feed_filter_query = Some("rust".to_string());
+        state.rebuild_feed_rows();
+        assert!(
+            matches!(state.feed_rows[1], FeedRow::GroupHeader { unread, .. } if unread == 5),
+            "filtered group header should only count visible feeds, got {:?}",
+            state.feed_rows[1]
+        );
+    }
+
+    #[test]
+    fn filtering_hides_groups_without_matching_feeds() {
+        let mut state = AppState::default();
+        state.groups = vec![
+            Group {
+                id: 1,
+                name: "Dev".to_string(),
+                position: 0,
+            },
+            Group {
+                id: 2,
+                name: "News".to_string(),
+                position: 1,
+            },
+        ];
+        state.reduce(Action::FeedsLoaded(vec![
+            sample_feed(1, "Rust Blog", Some(1)),
+            sample_feed(2, "Go Weekly", Some(2)),
+        ]));
+        state.reduce(Action::UpdateUnreadCounts(vec![(1, 5), (2, 3)]));
+        state.flush_feed_rows();
+        assert_eq!(state.feed_rows.len(), 5);
+
+        state.feed_filter_query = Some("rust".to_string());
+        state.rebuild_feed_rows();
+
+        let group_names: Vec<&str> = state
+            .feed_rows
+            .iter()
+            .filter_map(|row| match row {
+                FeedRow::GroupHeader { name, .. } => Some(name.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(group_names, vec!["Dev"]);
+    }
+
+    #[test]
+    fn filtering_keeps_collapsed_group_with_matching_feed() {
+        let mut state = AppState::default();
+        state.groups = vec![Group {
+            id: 1,
+            name: "Dev".to_string(),
+            position: 0,
+        }];
+        state.reduce(Action::FeedsLoaded(vec![sample_feed(
+            1,
+            "Rust Blog",
+            Some(1),
+        )]));
+        state.reduce(Action::UpdateUnreadCounts(vec![(1, 5)]));
+        state.collapsed_groups.insert(1);
+        state.feed_filter_query = Some("rust".to_string());
+        state.rebuild_feed_rows();
+
+        assert!(
+            state
+                .feed_rows
+                .iter()
+                .any(|row| matches!(row, FeedRow::GroupHeader { group_id: 1, .. })),
+            "collapsed group with a matching feed must stay visible"
+        );
+    }
+
+    #[test]
+    fn filtering_hides_ungrouped_header_without_matching_feeds() {
+        let mut state = AppState::default();
+        state.groups = vec![Group {
+            id: 1,
+            name: "Dev".to_string(),
+            position: 0,
+        }];
+        state.reduce(Action::FeedsLoaded(vec![
+            sample_feed(1, "Rust Blog", Some(1)),
+            sample_feed(2, "Go Weekly", None),
+        ]));
+        state.reduce(Action::UpdateUnreadCounts(vec![(1, 5), (2, 3)]));
+        state.feed_filter_query = Some("rust".to_string());
+        state.rebuild_feed_rows();
+
+        assert!(
+            !state
+                .feed_rows
+                .iter()
+                .any(|row| matches!(row, FeedRow::UngroupedHeader { .. })),
+            "ungrouped header must be hidden when no ungrouped feed matches"
+        );
+    }
+
+    #[test]
+    fn empty_group_stays_visible_without_filter() {
+        let mut state = AppState::default();
+        state.groups = vec![Group {
+            id: 1,
+            name: "Dev".to_string(),
+            position: 0,
+        }];
+        state.reduce(Action::FeedsLoaded(vec![]));
+        state.rebuild_feed_rows();
+
+        assert!(
+            state
+                .feed_rows
+                .iter()
+                .any(|row| matches!(row, FeedRow::GroupHeader { group_id: 1, .. })),
+            "an empty group must stay visible when nothing is filtered"
+        );
+    }
+
+    #[test]
+    fn ungrouped_header_count_matches_visible_feeds_when_filtering() {
+        let mut state = AppState::default();
+        state.groups = vec![Group {
+            id: 1,
+            name: "Dev".to_string(),
+            position: 0,
+        }];
+        state.reduce(Action::FeedsLoaded(vec![
+            sample_feed(1, "Rust Blog", Some(1)),
+            sample_feed(2, "Rust Weekly", None),
+            sample_feed(3, "Go Weekly", None),
+        ]));
+        state.reduce(Action::UpdateUnreadCounts(vec![(1, 2), (2, 5), (3, 3)]));
+        state.feed_filter_query = Some("rust".to_string());
+        state.rebuild_feed_rows();
+
+        let ungrouped = state
+            .feed_rows
+            .iter()
+            .find_map(|row| match row {
+                FeedRow::UngroupedHeader { unread } => Some(*unread),
+                _ => None,
+            })
+            .expect("ungrouped header");
+        assert_eq!(ungrouped, 5);
+    }
+
+    #[test]
+    fn all_feeds_unread_respects_feed_filter() {
+        let mut state = AppState::default();
+        state.reduce(Action::FeedsLoaded(vec![
+            sample_feed(1, "Rust Blog", None),
+            sample_feed(2, "Go Weekly", None),
+        ]));
+        state.reduce(Action::UpdateUnreadCounts(vec![(1, 5), (2, 3)]));
+        state.total_unread = 8;
+        assert_eq!(state.all_feeds_unread(), 8);
+
+        state.feed_filter_query = Some("rust".to_string());
+        state.rebuild_feed_rows();
+        assert_eq!(state.all_feeds_unread(), 5);
+    }
+
+    #[test]
+    fn adjust_unread_count_keeps_group_header_filtered() {
+        let mut state = AppState::default();
+        state.groups = vec![Group {
+            id: 1,
+            name: "Dev".to_string(),
+            position: 0,
+        }];
+        state.reduce(Action::FeedsLoaded(vec![
+            sample_feed(1, "Rust Blog", Some(1)),
+            sample_feed(2, "Go Weekly", Some(1)),
+        ]));
+        state.reduce(Action::UpdateUnreadCounts(vec![(1, 5), (2, 3)]));
+        state.feed_filter_query = Some("rust".to_string());
+        state.rebuild_feed_rows();
+
+        state.adjust_unread_count(1, -1);
+
+        assert!(
+            matches!(state.feed_rows[1], FeedRow::GroupHeader { unread, .. } if unread == 4),
+            "got {:?}",
+            state.feed_rows[1]
+        );
     }
 
     #[test]

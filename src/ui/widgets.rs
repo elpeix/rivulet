@@ -132,8 +132,9 @@ pub fn feeds_list<'a>(
         .iter()
         .filter_map(|row| match row {
             FeedRow::AllFeeds => {
-                let counter = if state.total_unread > 0 {
-                    format!("{}", state.total_unread)
+                let all_unread = state.all_feeds_unread();
+                let counter = if all_unread > 0 {
+                    format!("{all_unread}")
                 } else {
                     String::new()
                 };
