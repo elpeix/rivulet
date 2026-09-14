@@ -630,7 +630,7 @@ impl App {
                         }
                         Err(error) => {
                             errors += 1;
-                            last_error = Some(format!("Fetch error for {}: {:?}", job.url, error));
+                            last_error = Some(format!("Fetch error for {}: {error}", job.url));
                         }
                     }
                 }
