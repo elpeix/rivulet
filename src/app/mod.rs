@@ -58,9 +58,13 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(db: DbWorker, lang: Lang, recent_days: i64) -> Result<Self, String> {
-        let client =
-            HttpClient::new(FetchOptions::default()).map_err(|error| format!("{error}"))?;
+    pub fn new(
+        db: DbWorker,
+        lang: Lang,
+        recent_days: i64,
+        fetch_options: FetchOptions,
+    ) -> Result<Self, String> {
+        let client = HttpClient::new(fetch_options).map_err(|error| format!("{error}"))?;
 
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(2)
@@ -862,7 +866,7 @@ mod tests {
 
     pub(crate) fn test_app() -> App {
         let db = DbWorker::start_in_memory().expect("in-memory db");
-        App::new(db, Lang::from_code("en"), 30).expect("app")
+        App::new(db, Lang::from_code("en"), 30, FetchOptions::default()).expect("app")
     }
 
     #[test]

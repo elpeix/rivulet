@@ -1,5 +1,6 @@
 use serde::Deserialize;
 use std::path::PathBuf;
+use std::time::Duration;
 
 use crate::app::state::LayoutMode;
 
@@ -26,6 +27,8 @@ pub struct Config {
     pub theme: String,
     #[serde(default)]
     pub hide_read_feeds: bool,
+    #[serde(default = "default_fetch_timeout_seconds")]
+    pub fetch_timeout_seconds: u64,
 }
 
 fn default_layout() -> String {
@@ -48,6 +51,10 @@ fn default_theme() -> String {
     "terminal".to_string()
 }
 
+fn default_fetch_timeout_seconds() -> u64 {
+    30
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -57,6 +64,7 @@ impl Default for Config {
             layout: default_layout(),
             theme: default_theme(),
             hide_read_feeds: false,
+            fetch_timeout_seconds: default_fetch_timeout_seconds(),
         }
     }
 }
@@ -107,6 +115,15 @@ fn save_config_field(key: &str, value: &str) {
 }
 
 impl Config {
+    pub fn fetch_timeout(&self) -> Duration {
+        let seconds = if self.fetch_timeout_seconds == 0 {
+            default_fetch_timeout_seconds()
+        } else {
+            self.fetch_timeout_seconds
+        };
+        Duration::from_secs(seconds)
+    }
+
     pub fn layout_mode(&self) -> LayoutMode {
         match self.layout.as_str() {
             "split" => LayoutMode::Split,
@@ -187,5 +204,24 @@ mod tests {
         let config: Config = toml::from_str("").unwrap();
         assert_eq!(config.language, "en");
         assert_eq!(config.refresh_minutes, 30);
+    }
+
+    #[test]
+    fn fetch_timeout_defaults_to_thirty_seconds() {
+        let config = Config::default();
+        assert_eq!(config.fetch_timeout_seconds, 30);
+        assert_eq!(config.fetch_timeout(), Duration::from_secs(30));
+    }
+
+    #[test]
+    fn parse_fetch_timeout_seconds() {
+        let config: Config = toml::from_str("fetch_timeout_seconds = 45").unwrap();
+        assert_eq!(config.fetch_timeout(), Duration::from_secs(45));
+    }
+
+    #[test]
+    fn fetch_timeout_zero_falls_back_to_default() {
+        let config: Config = toml::from_str("fetch_timeout_seconds = 0").unwrap();
+        assert_eq!(config.fetch_timeout(), Duration::from_secs(30));
     }
 }
