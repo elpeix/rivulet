@@ -94,7 +94,7 @@ Categories are preserved during import and export.
 | `C`                 | Manage categories                                         |
 | `R`                 | Mark feed as read                                         |
 | `S`                 | Cycle sort mode                                           |
-| `i`                 | Feed info (name, URL, cache bypass)                       |
+| `i`                 | Feed info (name, URL, cache bypass); `u` edits the URL    |
 | `.`                 | Hide/show read feeds                                      |
 | `t`                 | Toggle time filter                                        |
 | `B`                 | Toggle cache bypass for feed                              |

@@ -85,6 +85,7 @@ pub struct Lang {
     pub no_feed_selected: String,
     pub bypass_cache_enabled: String,
     pub bypass_cache_disabled: String,
+    pub feed_url_updated: String,
     pub all_feeds: String,
     pub uncategorized: String,
     pub no_categories: String,
@@ -119,6 +120,8 @@ pub struct Lang {
     pub categories_title: String,
     pub help_title: String,
     pub feed_info_title: String,
+    pub feed_info_hint: String,
+    pub edit_feed_url_title: String,
 
     // Labels
     pub name_label: String,
@@ -243,6 +246,7 @@ impl Lang {
             no_feed_selected: get!(map, en, "no_feed_selected"),
             bypass_cache_enabled: get!(map, en, "bypass_cache_enabled"),
             bypass_cache_disabled: get!(map, en, "bypass_cache_disabled"),
+            feed_url_updated: get!(map, en, "feed_url_updated"),
             all_feeds: get!(map, en, "all_feeds"),
             uncategorized: get!(map, en, "uncategorized"),
             no_categories: get!(map, en, "no_categories"),
@@ -274,6 +278,8 @@ impl Lang {
             categories_title: get!(map, en, "categories_title"),
             help_title: get!(map, en, "help_title"),
             feed_info_title: get!(map, en, "feed_info_title"),
+            feed_info_hint: get!(map, en, "feed_info_hint"),
+            edit_feed_url_title: get!(map, en, "edit_feed_url_title"),
 
             name_label: get!(map, en, "name_label"),
             url_label: get!(map, en, "url_label"),

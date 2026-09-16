@@ -2,7 +2,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::app::App;
 use crate::app::actions::Action;
-use crate::app::state::{AppState, Focus, InputMode};
+use crate::app::state::{AppState, Focus, InputMode, StatusKind};
 use crate::i18n::Lang;
 use crate::ui;
 
@@ -80,11 +80,23 @@ pub fn handle_input_mode(app: &mut App, key: KeyEvent) -> bool {
             return handle_select_discovered_feed(app, key, &feeds, group_id);
         }
         InputMode::FeedInfo => {
-            if key.code == KeyCode::Esc {
-                app.state.input_mode = InputMode::None;
-                let _ = app.dispatch(Action::ClearStatus);
+            match key.code {
+                KeyCode::Esc => {
+                    app.state.input_mode = InputMode::None;
+                    let _ = app.dispatch(Action::ClearStatus);
+                }
+                KeyCode::Char('u') => {
+                    if let Some(url) = app.state.selected_feed_ref().map(|f| f.url.clone()) {
+                        app.state.input_mode = InputMode::EditFeedUrl;
+                        app.state.input_buffer = url;
+                    }
+                }
+                _ => {}
             }
             return false;
+        }
+        InputMode::EditFeedUrl => {
+            return handle_edit_feed_url(app, key);
         }
         InputMode::Discovering => {
             if key.code == KeyCode::Esc {
@@ -362,6 +374,44 @@ fn handle_manage_groups(app: &mut App, key: KeyEvent) -> bool {
     false
 }
 
+fn handle_edit_feed_url(app: &mut App, key: KeyEvent) -> bool {
+    match key.code {
+        KeyCode::Esc => {
+            app.state.input_mode = InputMode::FeedInfo;
+        }
+        KeyCode::Enter => {
+            let value = app.state.input_buffer.trim().to_string();
+            let target = app
+                .state
+                .selected_feed_ref()
+                .filter(|f| !value.is_empty() && value != f.url)
+                .map(|f| f.id);
+            match target {
+                Some(feed_id) => {
+                    let _ = app.dispatch(Action::SetFeedUrl {
+                        id: feed_id,
+                        url: value,
+                    });
+                    if app.state.status.as_ref().map(|s| s.kind) != Some(StatusKind::Error) {
+                        app.state.input_mode = InputMode::FeedInfo;
+                    }
+                }
+                None => {
+                    app.state.input_mode = InputMode::FeedInfo;
+                }
+            }
+        }
+        KeyCode::Backspace => {
+            app.state.input_buffer.pop();
+        }
+        KeyCode::Char(c) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+            app.state.input_buffer.push(c);
+        }
+        _ => {}
+    }
+    false
+}
+
 fn handle_group_text_input(app: &mut App, key: KeyEvent) -> bool {
     let mode = app.state.input_mode.clone();
 
@@ -489,6 +539,12 @@ pub fn current_modal(state: &AppState, lang: &Lang) -> Option<ui::Modal> {
             value: state.input_buffer.clone(),
             hint: None,
         }),
+        InputMode::EditFeedUrl => Some(ui::Modal::Input {
+            title: lang.edit_feed_url_title.to_string(),
+            prompt: lang.url_label.to_string(),
+            value: state.input_buffer.clone(),
+            hint: None,
+        }),
         InputMode::DeleteFeed => Some(ui::Modal::Confirm {
             title: lang.delete_feed_title.to_string(),
             prompt: if state.selected_feed.is_some() {
@@ -512,10 +568,7 @@ pub fn current_modal(state: &AppState, lang: &Lang) -> Option<ui::Modal> {
             value: state.input_buffer.clone(),
         }),
         InputMode::FeedInfo => {
-            let feed = state
-                .selected_feed
-                .and_then(|id| state.feeds.iter().find(|f| f.id == id));
-            if let Some(feed) = feed {
+            if let Some(feed) = state.selected_feed_ref() {
                 let title = feed.display_title().unwrap_or(&lang.no_title).to_string();
                 Some(ui::Modal::FeedInfo {
                     title,
@@ -539,6 +592,7 @@ pub fn current_modal(state: &AppState, lang: &Lang) -> Option<ui::Modal> {
 mod tests {
     use super::*;
     use crate::app::tests::test_app;
+    use crate::store::models::Feed;
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
     fn key(code: KeyCode) -> KeyEvent {
@@ -750,6 +804,101 @@ mod tests {
         app.state.input_mode = InputMode::FeedInfo;
         handle_input_mode(&mut app, key(KeyCode::Char('a')));
         assert_eq!(app.state.input_mode, InputMode::FeedInfo);
+    }
+
+    fn app_with_selected_feed() -> App {
+        let mut app = test_app();
+        app.state.feeds = vec![Feed {
+            id: 1,
+            title: Some("A".to_string()),
+            custom_title: None,
+            url: "https://a.com/feed".to_string(),
+            etag: None,
+            last_modified: None,
+            last_checked_at: None,
+            group_id: None,
+            bypass_cache: false,
+        }];
+        app.state.rebuild_feed_rows();
+        app.state.selected_feed = Some(1);
+        app
+    }
+
+    #[test]
+    fn feed_info_u_opens_url_editor_prefilled() {
+        let mut app = app_with_selected_feed();
+        app.state.input_mode = InputMode::FeedInfo;
+        let closed = handle_input_mode(&mut app, key(KeyCode::Char('u')));
+        assert!(!closed);
+        assert_eq!(app.state.input_mode, InputMode::EditFeedUrl);
+        assert_eq!(app.state.input_buffer, "https://a.com/feed");
+    }
+
+    #[test]
+    fn feed_info_u_without_feed_does_nothing() {
+        let mut app = test_app();
+        app.state.input_mode = InputMode::FeedInfo;
+        handle_input_mode(&mut app, key(KeyCode::Char('u')));
+        assert_eq!(app.state.input_mode, InputMode::FeedInfo);
+    }
+
+    #[test]
+    fn edit_feed_url_esc_returns_to_feed_info() {
+        let mut app = app_with_selected_feed();
+        app.state.input_mode = InputMode::EditFeedUrl;
+        app.state.input_buffer = "https://a.com/other".to_string();
+        let closed = handle_input_mode(&mut app, key(KeyCode::Esc));
+        assert!(!closed);
+        assert_eq!(app.state.input_mode, InputMode::FeedInfo);
+        assert_eq!(app.state.feeds[0].url, "https://a.com/feed");
+    }
+
+    #[test]
+    fn edit_feed_url_typing_edits_buffer() {
+        let mut app = app_with_selected_feed();
+        app.state.input_mode = InputMode::EditFeedUrl;
+        app.state.input_buffer = "https://a.com/fee".to_string();
+        handle_input_mode(&mut app, key(KeyCode::Char('d')));
+        assert_eq!(app.state.input_buffer, "https://a.com/feed");
+        handle_input_mode(&mut app, key(KeyCode::Backspace));
+        assert_eq!(app.state.input_buffer, "https://a.com/fee");
+        assert_eq!(app.state.input_mode, InputMode::EditFeedUrl);
+    }
+
+    #[test]
+    fn edit_feed_url_enter_with_invalid_url_shows_error_and_stays_open() {
+        let mut app = app_with_selected_feed();
+        app.state.input_mode = InputMode::EditFeedUrl;
+        app.state.input_buffer = "not-a-url".to_string();
+        let closed = handle_input_mode(&mut app, key(KeyCode::Enter));
+        assert!(!closed);
+        assert_eq!(app.state.input_mode, InputMode::EditFeedUrl);
+        let status = app.state.status.as_ref().expect("status");
+        assert_eq!(status.kind, StatusKind::Error);
+    }
+
+    #[test]
+    fn edit_feed_url_enter_unchanged_returns_to_feed_info() {
+        let mut app = app_with_selected_feed();
+        app.state.input_mode = InputMode::EditFeedUrl;
+        app.state.input_buffer = "https://a.com/feed".to_string();
+        let closed = handle_input_mode(&mut app, key(KeyCode::Enter));
+        assert!(!closed);
+        assert_eq!(app.state.input_mode, InputMode::FeedInfo);
+    }
+
+    #[test]
+    fn edit_feed_url_modal_shows_input_with_url() {
+        let mut app = app_with_selected_feed();
+        app.state.input_mode = InputMode::EditFeedUrl;
+        app.state.input_buffer = "https://a.com/feed".to_string();
+        match current_modal(&app.state, &app.lang) {
+            Some(ui::Modal::Input { title, value, .. }) => {
+                assert_eq!(title, app.lang.edit_feed_url_title);
+                assert_eq!(value, "https://a.com/feed");
+            }
+            other => panic!("expected input modal, got {}", other.is_some()),
+        }
     }
 
     #[test]

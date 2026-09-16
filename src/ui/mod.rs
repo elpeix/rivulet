@@ -432,7 +432,10 @@ fn draw_modal(
                 )));
             }
             lines.push(Line::from(""));
-            lines.push(Line::from(Span::styled("Esc", theme.dim_style())));
+            lines.push(Line::from(Span::styled(
+                lang.feed_info_hint.as_str(),
+                theme.dim_style(),
+            )));
             frame.render_widget(modal(&lang.feed_info_title, Text::from(lines), theme), area);
         }
         Modal::Discovering => {

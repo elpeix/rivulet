@@ -26,6 +26,7 @@ pub enum InputMode {
         group_id: i64,
     },
     FeedInfo,
+    EditFeedUrl,
     Discovering,
     SelectDiscoveredFeed {
         feeds: Vec<DiscoveredFeed>,
@@ -219,6 +220,11 @@ impl Default for AppState {
 impl AppState {
     pub fn entry_position(&self, id: i64) -> Option<usize> {
         self.entry_id_to_index.get(&id).copied()
+    }
+
+    pub fn selected_feed_ref(&self) -> Option<&Feed> {
+        self.selected_feed
+            .and_then(|id| self.feeds.iter().find(|f| f.id == id))
     }
 
     /// Returns the appropriate refresh action based on the current view context.
@@ -485,6 +491,7 @@ impl AppState {
             | Action::AddFeed { .. }
             | Action::DeleteFeed(_)
             | Action::RenameFeed { .. }
+            | Action::SetFeedUrl { .. }
             | Action::SetFeedBypassCache { .. }
             | Action::MarkRead(_)
             | Action::MarkUnread(_)

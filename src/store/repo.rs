@@ -75,6 +75,14 @@ impl Repo {
         Ok(())
     }
 
+    pub fn set_feed_url(&self, feed_id: i64, url: &str) -> Result<()> {
+        self.conn.execute(
+            "UPDATE feeds SET url = ?1, etag = NULL, last_modified = NULL WHERE id = ?2;",
+            params![url, feed_id],
+        )?;
+        Ok(())
+    }
+
     pub fn delete_feed(&self, feed_id: i64) -> Result<()> {
         self.conn
             .execute("DELETE FROM feeds WHERE id = ?1;", params![feed_id])?;
@@ -828,6 +836,41 @@ mod tests {
         let restored = repo.get_feed(feed.id).unwrap().unwrap();
         assert!(restored.custom_title.is_none());
         assert_eq!(restored.display_title(), Some("Sample"));
+    }
+
+    #[test]
+    fn set_feed_url_updates_url_and_clears_cache_state() {
+        let repo = test_repo();
+        let feed = repo
+            .create_feed(&sample_feed("https://example.com/rss"))
+            .unwrap();
+        repo.update_feed_fetch_state(feed.id, Some("etag-1"), Some("Mon, 01 Jan 2024"), Some(1))
+            .unwrap();
+
+        repo.set_feed_url(feed.id, "https://example.com/rss?max-results=5")
+            .unwrap();
+
+        let updated = repo.get_feed(feed.id).unwrap().unwrap();
+        assert_eq!(updated.url, "https://example.com/rss?max-results=5");
+        assert!(updated.etag.is_none());
+        assert!(updated.last_modified.is_none());
+    }
+
+    #[test]
+    fn set_feed_url_rejects_duplicate_url() {
+        let repo = test_repo();
+        let first = repo
+            .create_feed(&sample_feed("https://example.com/a"))
+            .unwrap();
+        repo.create_feed(&sample_feed("https://example.com/b"))
+            .unwrap();
+
+        assert!(
+            repo.set_feed_url(first.id, "https://example.com/b")
+                .is_err()
+        );
+        let unchanged = repo.get_feed(first.id).unwrap().unwrap();
+        assert_eq!(unchanged.url, "https://example.com/a");
     }
 
     #[test]
