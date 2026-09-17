@@ -100,7 +100,7 @@ Categories are preserved during import and export.
 | `B`                 | Toggle cache bypass for feed                              |
 | **Entries**         |                                                           |
 | `m`                 | Toggle read/unread                                        |
-| `M`                 | Mark all visible as read                                  |
+| `M`                 | Mark all visible as read (asks for confirmation)          |
 | `s`                 | Save for later                                            |
 | `r`                 | Refresh selected feed                                     |
 | `/`                 | Search (contextual: feeds / entries / preview)            |

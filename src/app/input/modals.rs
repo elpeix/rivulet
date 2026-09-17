@@ -6,6 +6,8 @@ use crate::app::state::{AppState, Focus, InputMode, StatusKind};
 use crate::i18n::Lang;
 use crate::ui;
 
+use super::keyboard::mark_all_visible_read;
+
 const MAX_GROUP_NAME_LEN: usize = 64;
 
 pub fn handle_help_key(app: &mut App, key: KeyEvent) {
@@ -97,6 +99,13 @@ pub fn handle_input_mode(app: &mut App, key: KeyEvent) -> bool {
         }
         InputMode::EditFeedUrl => {
             return handle_edit_feed_url(app, key);
+        }
+        InputMode::MarkAllRead { .. } => {
+            if matches!(key.code, KeyCode::Char('y' | 'Y' | 's' | 'S')) {
+                mark_all_visible_read(app);
+            }
+            let _ = app.dispatch(Action::ClearStatus);
+            return true;
         }
         InputMode::Discovering => {
             if key.code == KeyCode::Esc {
@@ -553,6 +562,10 @@ pub fn current_modal(state: &AppState, lang: &Lang) -> Option<ui::Modal> {
                 lang.no_feed_selected.to_string()
             },
         }),
+        InputMode::MarkAllRead { unread_count } => Some(ui::Modal::Confirm {
+            title: lang.mark_all_read_title.to_string(),
+            prompt: lang.mark_all_read_confirm(*unread_count),
+        }),
         InputMode::AddFeedGroup { .. } | InputMode::AssignGroup => Some(ui::Modal::AssignGroup {
             selection: state.modal_selection,
         }),
@@ -736,6 +749,80 @@ mod tests {
         app.state.input_mode = InputMode::DeleteFeed;
         let closed = handle_input_mode(&mut app, key(KeyCode::Char('n')));
         assert!(closed);
+    }
+
+    fn app_with_unread_entries() -> App {
+        let mut app = test_app();
+        app.state.entries = (10..13)
+            .map(|id| crate::store::models::Entry {
+                id,
+                feed_id: 1,
+                title: Some(format!("Entry {id}")),
+                url: None,
+                author: None,
+                published_at: None,
+                fetched_at: 0,
+                summary: None,
+                content: None,
+                read_at: None,
+                saved_at: None,
+            })
+            .collect();
+        app.state.input_mode = InputMode::MarkAllRead { unread_count: 3 };
+        app
+    }
+
+    #[test]
+    fn mark_all_read_y_confirms_and_marks_entries() {
+        let mut app = app_with_unread_entries();
+        let closed = handle_input_mode(&mut app, key(KeyCode::Char('y')));
+        assert!(closed);
+        assert!(app.state.entries.iter().all(|e| e.read_at.is_some()));
+    }
+
+    #[test]
+    fn mark_all_read_s_confirms_catalan() {
+        let mut app = app_with_unread_entries();
+        let closed = handle_input_mode(&mut app, key(KeyCode::Char('s')));
+        assert!(closed);
+        assert!(app.state.entries.iter().all(|e| e.read_at.is_some()));
+    }
+
+    #[test]
+    fn mark_all_read_n_cancels() {
+        let mut app = app_with_unread_entries();
+        let closed = handle_input_mode(&mut app, key(KeyCode::Char('n')));
+        assert!(closed);
+        assert!(app.state.entries.iter().all(|e| e.read_at.is_none()));
+    }
+
+    #[test]
+    fn mark_all_read_esc_cancels() {
+        let mut app = app_with_unread_entries();
+        let closed = handle_input_mode(&mut app, key(KeyCode::Esc));
+        assert!(closed);
+        assert!(app.state.entries.iter().all(|e| e.read_at.is_none()));
+    }
+
+    #[test]
+    fn mark_all_read_enter_cancels() {
+        let mut app = app_with_unread_entries();
+        let closed = handle_input_mode(&mut app, key(KeyCode::Enter));
+        assert!(closed);
+        assert!(app.state.entries.iter().all(|e| e.read_at.is_none()));
+    }
+
+    #[test]
+    fn mark_all_read_modal_shows_count() {
+        let app = app_with_unread_entries();
+        match current_modal(&app.state, &app.lang) {
+            Some(ui::Modal::Confirm { title, prompt }) => {
+                assert_eq!(title, app.lang.mark_all_read_title);
+                assert_eq!(prompt, app.lang.mark_all_read_confirm(3));
+                assert!(prompt.contains('3'));
+            }
+            other => panic!("expected confirm modal, got {}", other.is_some()),
+        }
     }
 
     #[test]

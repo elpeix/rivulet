@@ -18,6 +18,9 @@ pub enum InputMode {
     },
     RenameFeed,
     DeleteFeed,
+    MarkAllRead {
+        unread_count: usize,
+    },
     AssignGroup,
     ManageGroups,
     AddGroup,

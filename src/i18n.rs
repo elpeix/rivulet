@@ -114,6 +114,7 @@ pub struct Lang {
     pub rename_feed_title: String,
     pub rename_feed_hint: String,
     pub delete_feed_title: String,
+    pub mark_all_read_title: String,
     pub new_category: String,
     pub rename_category: String,
     pub category_title: String,
@@ -221,6 +222,7 @@ pub struct Lang {
     tpl_filter_recent_days: String,
     tpl_no_feed_found: String,
     tpl_refreshing_feed: String,
+    tpl_mark_all_read_confirm: String,
 }
 
 impl Lang {
@@ -272,6 +274,7 @@ impl Lang {
             rename_feed_title: get!(map, en, "rename_feed_title"),
             rename_feed_hint: get!(map, en, "rename_feed_hint"),
             delete_feed_title: get!(map, en, "delete_feed_title"),
+            mark_all_read_title: get!(map, en, "mark_all_read_title"),
             new_category: get!(map, en, "new_category"),
             rename_category: get!(map, en, "rename_category"),
             category_title: get!(map, en, "category_title"),
@@ -370,6 +373,7 @@ impl Lang {
             tpl_filter_recent_days: get!(map, en, "filter_recent_days"),
             tpl_no_feed_found: get!(map, en, "no_feed_found"),
             tpl_refreshing_feed: get!(map, en, "refreshing_feed"),
+            tpl_mark_all_read_confirm: get!(map, en, "mark_all_read_confirm"),
         }
     }
 
@@ -417,6 +421,11 @@ impl Lang {
 
     pub fn refreshing_feed(&self, name: &str) -> String {
         self.tpl_refreshing_feed.replace("{name}", name)
+    }
+
+    pub fn mark_all_read_confirm(&self, count: usize) -> String {
+        self.tpl_mark_all_read_confirm
+            .replace("{count}", &count.to_string())
     }
 }
 
@@ -509,6 +518,10 @@ mod tests {
             "Feed saved: https://x.com"
         );
         assert_eq!(lang.invalid_url("bad"), "Invalid URL: bad");
+        assert_eq!(
+            lang.mark_all_read_confirm(12),
+            "Mark 12 entries as read? (y/N)"
+        );
         assert_eq!(
             lang.refreshed_summary(3, 42, 1),
             "Refreshed 3 feeds (42 entries, 1 errors)"
