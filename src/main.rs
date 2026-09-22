@@ -29,6 +29,7 @@ use crate::app::input::{
 };
 use crate::app::state::InputMode;
 use crate::config::Config;
+use crate::fetch::client::FetchOptions;
 use crate::i18n::Lang;
 use crate::ui::theme::Theme;
 
@@ -220,7 +221,11 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io::Result<
     let db_path = data_dir()?.join("rivulet.db");
     let db =
         DbWorker::start(&db_path).map_err(|error| io::Error::other(format!("DB: {error:?}")))?;
-    let mut app = App::new(db, lang, config.recent_days)
+    let fetch_options = FetchOptions {
+        timeout: config.fetch_timeout(),
+        ..FetchOptions::default()
+    };
+    let mut app = App::new(db, lang, config.recent_days, fetch_options)
         .map_err(|error| io::Error::other(format!("App: {error}")))?;
     app.state.layout_mode = config.layout_mode();
     app.state.hide_read_feeds = config.hide_read_feeds;

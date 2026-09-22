@@ -8,6 +8,26 @@ use crate::util::time::now_timestamp;
 
 use super::dispatch_load_entries;
 
+pub(super) fn mark_all_visible_read(app: &mut App) {
+    let timestamp = now_timestamp();
+    let mut unread_ids = Vec::new();
+    let mut deltas: std::collections::HashMap<i64, i64> = std::collections::HashMap::new();
+    for entry in &mut app.state.entries {
+        if entry.read_at.is_none() {
+            entry.read_at = Some(timestamp);
+            unread_ids.push(entry.id);
+            *deltas.entry(entry.feed_id).or_default() += 1;
+        }
+    }
+    if unread_ids.is_empty() {
+        return;
+    }
+    for (feed_id, count) in deltas {
+        app.state.adjust_unread_count(feed_id, -count);
+    }
+    let _ = app.dispatch(Action::MarkAllRead(unread_ids));
+}
+
 pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
     match key.code {
         KeyCode::Char('q') => return true,
@@ -220,32 +240,15 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
             }
         }
         KeyCode::Char('M') => {
-            let unread_ids: Vec<i64> = app
+            let unread_count = app
                 .state
                 .entries
                 .iter()
                 .filter(|e| e.read_at.is_none())
-                .map(|e| e.id)
-                .collect();
-            if !unread_ids.is_empty() {
-                let timestamp = now_timestamp();
-                for entry in &mut app.state.entries {
-                    if entry.read_at.is_none() {
-                        entry.read_at = Some(timestamp);
-                    }
-                }
-                // Adjust counts once per feed instead of per entry
-                let mut deltas: std::collections::HashMap<i64, i64> =
-                    std::collections::HashMap::new();
-                for id in &unread_ids {
-                    if let Some(idx) = app.state.entry_position(*id) {
-                        *deltas.entry(app.state.entries[idx].feed_id).or_default() += 1;
-                    }
-                }
-                for (feed_id, count) in deltas {
-                    app.state.adjust_unread_count(feed_id, -count);
-                }
-                let _ = app.dispatch(Action::MarkAllRead(unread_ids));
+                .count();
+            if unread_count > 0 {
+                app.state.input_mode = InputMode::MarkAllRead { unread_count };
+                app.state.input_buffer.clear();
             }
         }
         KeyCode::Char('x')
@@ -795,6 +798,39 @@ mod tests {
         app.state.selected_entry_index = Some(0);
         app.state.focus = Focus::Entries;
         app
+    }
+
+    #[test]
+    fn shift_m_with_unread_entries_asks_for_confirmation() {
+        let mut app = app_with_entries();
+        handle_key(&mut app, key(KeyCode::Char('M')));
+        assert_eq!(
+            app.state.input_mode,
+            InputMode::MarkAllRead { unread_count: 3 }
+        );
+        assert!(app.state.entries.iter().all(|e| e.read_at.is_none()));
+    }
+
+    #[test]
+    fn shift_m_without_unread_entries_does_nothing() {
+        let mut app = app_with_entries();
+        for entry in &mut app.state.entries {
+            entry.read_at = Some(1);
+        }
+        handle_key(&mut app, key(KeyCode::Char('M')));
+        assert_eq!(app.state.input_mode, InputMode::None);
+    }
+
+    #[test]
+    fn mark_all_visible_read_marks_entries_and_adjusts_counts() {
+        let mut app = app_with_entries();
+        app.state.entries[1].read_at = Some(1);
+        app.state.unread_counts.insert(1, 5);
+
+        mark_all_visible_read(&mut app);
+
+        assert!(app.state.entries.iter().all(|e| e.read_at.is_some()));
+        assert_eq!(app.state.unread_counts.get(&1).copied(), Some(3));
     }
 
     #[test]

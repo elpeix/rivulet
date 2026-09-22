@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.6.0] - 2026-09-21
+
+### Added
+
+- **Edit a feed's URL**: Press `u` in the Feed info modal (`i`) to change the feed's URL in place. Entries and read state are kept; the feed's `ETag` / `Last-Modified` are cleared so the next refresh fetches the new URL unconditionally. Invalid URLs and URLs already used by another feed are rejected with an error and the editor stays open
+- **Confirmation before marking all as read**: `M` now opens a confirm modal showing how many visible entries would be marked, instead of marking them immediately. `y`/`s` confirms; `n`, `Esc` or `Enter` cancels
+- **Configurable fetch timeout**: New `fetch_timeout_seconds` option in `config.toml` (default 30, previously a fixed 10). Large feeds (e.g. Blogger feeds embedding base64 images) could not download in time and failed every refresh
+
+### Fixed
+
+- **Fetch errors logged as just `Fetch`**: `SchedulerError` discarded the underlying error, so the log and status bar could not tell a timeout from a 404. The message is now preserved (e.g. `HTTP error: operation timed out`, `HTTP status 404`)
+
+### Internal
+
+- `SchedulerError::Fetch(String)` carries the `FetchError` text and implements `Display`
+- `Config::fetch_timeout()`; `App::new` takes `FetchOptions` instead of building the default client itself
+- `Repo::set_feed_url`; `Action::SetFeedUrl` / `DbCommand::SetFeedUrl`; `InputMode::EditFeedUrl` and `InputMode::MarkAllRead { unread_count }`
+- `AppState::selected_feed_ref` replaces the repeated `selected_feed` → `feeds.iter().find` lookup
+- The mark-all-read logic moved from the `M` key handler to `mark_all_visible_read`, which no longer depends on the entry index
+- New i18n strings (`feed_url_updated`, `feed_info_hint`, `edit_feed_url_title`, `mark_all_read_title`, `mark_all_read_confirm`) in English and Catalan
+- New tests: `set_feed_url_updates_url_and_clears_cache_state`, `set_feed_url_rejects_duplicate_url`, `set_feed_url_rejects_invalid_url`, `set_feed_url_updates_feed_in_state`, `set_feed_url_duplicate_keeps_db_error_status`, `feed_info_u_opens_url_editor_prefilled`, `feed_info_u_without_feed_does_nothing`, `edit_feed_url_esc_returns_to_feed_info`, `edit_feed_url_typing_edits_buffer`, `edit_feed_url_enter_with_invalid_url_shows_error_and_stays_open`, `edit_feed_url_enter_unchanged_returns_to_feed_info`, `edit_feed_url_modal_shows_input_with_url`, `shift_m_with_unread_entries_asks_for_confirmation`, `shift_m_without_unread_entries_does_nothing`, `mark_all_visible_read_marks_entries_and_adjusts_counts`, `mark_all_read_y_confirms_and_marks_entries`, `mark_all_read_s_confirms_catalan`, `mark_all_read_n_cancels`, `mark_all_read_esc_cancels`, `mark_all_read_enter_cancels`, `mark_all_read_modal_shows_count`, `scheduler_error_keeps_fetch_error_message`, `fetch_timeout_defaults_to_thirty_seconds`, `parse_fetch_timeout_seconds`, `fetch_timeout_zero_falls_back_to_default`
+
 ## [1.5.1] - 2026-08-07
 
 ### Fixed

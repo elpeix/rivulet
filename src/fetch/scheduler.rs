@@ -22,13 +22,22 @@ pub struct FetchResult {
 
 #[derive(Debug)]
 pub enum SchedulerError {
-    Fetch,
+    Fetch(String),
     Acquire,
 }
 
+impl std::fmt::Display for SchedulerError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Fetch(message) => f.write_str(message),
+            Self::Acquire => f.write_str("scheduler closed"),
+        }
+    }
+}
+
 impl From<FetchError> for SchedulerError {
-    fn from(_: FetchError) -> Self {
-        Self::Fetch
+    fn from(error: FetchError) -> Self {
+        Self::Fetch(error.to_string())
     }
 }
 
@@ -143,8 +152,20 @@ mod tests {
         let results = scheduler.run(jobs).await;
         assert_eq!(results.len(), 2);
         for (_job, result) in &results {
-            assert!(result.is_err());
+            match result {
+                Err(SchedulerError::Fetch(message)) => assert!(!message.is_empty()),
+                other => panic!("expected a fetch error, got {other:?}"),
+            }
         }
+    }
+
+    #[test]
+    fn scheduler_error_keeps_fetch_error_message() {
+        let error = SchedulerError::from(FetchError::Status(404));
+        assert_eq!(error.to_string(), "HTTP status 404");
+
+        let error = SchedulerError::from(FetchError::Http("timeout".to_string()));
+        assert_eq!(error.to_string(), "HTTP error: timeout");
     }
 
     #[tokio::test]

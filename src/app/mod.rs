@@ -58,9 +58,13 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(db: DbWorker, lang: Lang, recent_days: i64) -> Result<Self, String> {
-        let client =
-            HttpClient::new(FetchOptions::default()).map_err(|error| format!("{error}"))?;
+    pub fn new(
+        db: DbWorker,
+        lang: Lang,
+        recent_days: i64,
+        fetch_options: FetchOptions,
+    ) -> Result<Self, String> {
+        let client = HttpClient::new(fetch_options).map_err(|error| format!("{error}"))?;
 
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(2)
@@ -116,6 +120,21 @@ impl App {
             Action::RenameFeed { id, title } => {
                 self.send_and_handle(DbCommand::RenameFeed { id, title })?;
                 self.send_and_handle(DbCommand::ListFeeds)?;
+            }
+            Action::SetFeedUrl { id, url } => {
+                if !is_valid_feed_url(&url) {
+                    self.state
+                        .reduce(Action::DbError(self.lang.invalid_url(&url)));
+                    return Ok(());
+                }
+                let response = self.db.send(DbCommand::SetFeedUrl { id, url })?;
+                let succeeded = matches!(response, DbResponse::Ok(Ok(())));
+                self.handle_db_response(response);
+                self.send_and_handle(DbCommand::ListFeeds)?;
+                if succeeded {
+                    self.state
+                        .reduce(Action::SetStatus(self.lang.feed_url_updated.clone()));
+                }
             }
             Action::SetFeedBypassCache { feed_id, bypass } => {
                 self.send_and_handle(DbCommand::SetFeedBypassCache { feed_id, bypass })?;
@@ -630,7 +649,7 @@ impl App {
                         }
                         Err(error) => {
                             errors += 1;
-                            last_error = Some(format!("Fetch error for {}: {:?}", job.url, error));
+                            last_error = Some(format!("Fetch error for {}: {error}", job.url));
                         }
                     }
                 }
@@ -862,7 +881,7 @@ mod tests {
 
     pub(crate) fn test_app() -> App {
         let db = DbWorker::start_in_memory().expect("in-memory db");
-        App::new(db, Lang::from_code("en"), 30).expect("app")
+        App::new(db, Lang::from_code("en"), 30, FetchOptions::default()).expect("app")
     }
 
     #[test]
@@ -1122,6 +1141,71 @@ mod tests {
         // Should not be an error status
         let status = app.state.status.as_ref().expect("status");
         assert_eq!(status.kind, state::StatusKind::Info);
+    }
+
+    #[test]
+    fn set_feed_url_rejects_invalid_url() {
+        let mut app = test_app();
+        app.dispatch(Action::SetFeedUrl {
+            id: 1,
+            url: "not-a-url".to_string(),
+        })
+        .expect("dispatch");
+        let status = app.state.status.as_ref().expect("status");
+        assert_eq!(status.kind, state::StatusKind::Error);
+        assert!(status.message.contains("Invalid URL"));
+    }
+
+    #[test]
+    fn set_feed_url_updates_feed_in_state() {
+        let mut app = test_app();
+        app.send_and_handle(DbCommand::CreateFeed(NewFeed {
+            title: Some("Sample".to_string()),
+            url: "https://example.com/rss".to_string(),
+            created_at: 0,
+        }))
+        .expect("create feed");
+        app.dispatch(Action::LoadFeeds).expect("load feeds");
+        let feed_id = app.state.feeds[0].id;
+
+        app.dispatch(Action::SetFeedUrl {
+            id: feed_id,
+            url: "https://example.com/rss?max-results=5".to_string(),
+        })
+        .expect("dispatch");
+
+        assert_eq!(
+            app.state.feeds[0].url,
+            "https://example.com/rss?max-results=5"
+        );
+        let status = app.state.status.as_ref().expect("status");
+        assert_eq!(status.kind, state::StatusKind::Info);
+        assert_eq!(status.message, app.lang.feed_url_updated);
+    }
+
+    #[test]
+    fn set_feed_url_duplicate_keeps_db_error_status() {
+        let mut app = test_app();
+        for url in ["https://example.com/a", "https://example.com/b"] {
+            app.send_and_handle(DbCommand::CreateFeed(NewFeed {
+                title: Some("Sample".to_string()),
+                url: url.to_string(),
+                created_at: 0,
+            }))
+            .expect("create feed");
+        }
+        app.dispatch(Action::LoadFeeds).expect("load feeds");
+        let first_id = app.state.feeds[0].id;
+
+        app.dispatch(Action::SetFeedUrl {
+            id: first_id,
+            url: "https://example.com/b".to_string(),
+        })
+        .expect("dispatch");
+
+        let status = app.state.status.as_ref().expect("status");
+        assert_eq!(status.kind, state::StatusKind::Error);
+        assert_eq!(app.state.feeds[0].url, "https://example.com/a");
     }
 
     #[test]

@@ -43,6 +43,10 @@ pub enum Action {
         id: i64,
         title: Option<String>,
     },
+    SetFeedUrl {
+        id: i64,
+        url: String,
+    },
     SetFeedBypassCache {
         feed_id: i64,
         bypass: bool,

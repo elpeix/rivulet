@@ -18,6 +18,10 @@ pub enum DbCommand {
         id: i64,
         title: Option<String>,
     },
+    SetFeedUrl {
+        id: i64,
+        url: String,
+    },
     SetFeedBypassCache {
         feed_id: i64,
         bypass: bool,
@@ -173,6 +177,9 @@ fn handle_command(repo: &Repo, command: DbCommand) -> DbResponse {
         DbCommand::DeleteFeed(feed_id) => DbResponse::Ok(map_result(repo.delete_feed(feed_id))),
         DbCommand::RenameFeed { id, title } => {
             DbResponse::Ok(map_result(repo.rename_feed(id, title.as_deref())))
+        }
+        DbCommand::SetFeedUrl { id, url } => {
+            DbResponse::Ok(map_result(repo.set_feed_url(id, &url)))
         }
         DbCommand::SetFeedBypassCache { feed_id, bypass } => {
             DbResponse::Ok(map_result(repo.set_feed_bypass_cache(feed_id, bypass)))

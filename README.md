@@ -94,13 +94,13 @@ Categories are preserved during import and export.
 | `C`                 | Manage categories                                         |
 | `R`                 | Mark feed as read                                         |
 | `S`                 | Cycle sort mode                                           |
-| `i`                 | Feed info (name, URL, cache bypass)                       |
+| `i`                 | Feed info (name, URL, cache bypass); `u` edits the URL    |
 | `.`                 | Hide/show read feeds                                      |
 | `t`                 | Toggle time filter                                        |
 | `B`                 | Toggle cache bypass for feed                              |
 | **Entries**         |                                                           |
 | `m`                 | Toggle read/unread                                        |
-| `M`                 | Mark all visible as read                                  |
+| `M`                 | Mark all visible as read (asks for confirmation)          |
 | `s`                 | Save for later                                            |
 | `r`                 | Refresh selected feed                                     |
 | `/`                 | Search (contextual: feeds / entries / preview)            |
@@ -124,6 +124,7 @@ recent_days = 30        # time filter window in days
 layout = "columns"      # or "split" for 2-column stacked layout
 theme = "terminal"      # "terminal", "dark", "light", or custom name
 hide_read_feeds = false  # hide feeds with no unread entries
+fetch_timeout_seconds = 30  # per-feed HTTP timeout (large feeds may need more)
 ```
 
 The config file is created automatically on first run.

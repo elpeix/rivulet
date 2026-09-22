@@ -85,6 +85,7 @@ pub struct Lang {
     pub no_feed_selected: String,
     pub bypass_cache_enabled: String,
     pub bypass_cache_disabled: String,
+    pub feed_url_updated: String,
     pub all_feeds: String,
     pub uncategorized: String,
     pub no_categories: String,
@@ -113,12 +114,15 @@ pub struct Lang {
     pub rename_feed_title: String,
     pub rename_feed_hint: String,
     pub delete_feed_title: String,
+    pub mark_all_read_title: String,
     pub new_category: String,
     pub rename_category: String,
     pub category_title: String,
     pub categories_title: String,
     pub help_title: String,
     pub feed_info_title: String,
+    pub feed_info_hint: String,
+    pub edit_feed_url_title: String,
 
     // Labels
     pub name_label: String,
@@ -218,6 +222,7 @@ pub struct Lang {
     tpl_filter_recent_days: String,
     tpl_no_feed_found: String,
     tpl_refreshing_feed: String,
+    tpl_mark_all_read_confirm: String,
 }
 
 impl Lang {
@@ -243,6 +248,7 @@ impl Lang {
             no_feed_selected: get!(map, en, "no_feed_selected"),
             bypass_cache_enabled: get!(map, en, "bypass_cache_enabled"),
             bypass_cache_disabled: get!(map, en, "bypass_cache_disabled"),
+            feed_url_updated: get!(map, en, "feed_url_updated"),
             all_feeds: get!(map, en, "all_feeds"),
             uncategorized: get!(map, en, "uncategorized"),
             no_categories: get!(map, en, "no_categories"),
@@ -268,12 +274,15 @@ impl Lang {
             rename_feed_title: get!(map, en, "rename_feed_title"),
             rename_feed_hint: get!(map, en, "rename_feed_hint"),
             delete_feed_title: get!(map, en, "delete_feed_title"),
+            mark_all_read_title: get!(map, en, "mark_all_read_title"),
             new_category: get!(map, en, "new_category"),
             rename_category: get!(map, en, "rename_category"),
             category_title: get!(map, en, "category_title"),
             categories_title: get!(map, en, "categories_title"),
             help_title: get!(map, en, "help_title"),
             feed_info_title: get!(map, en, "feed_info_title"),
+            feed_info_hint: get!(map, en, "feed_info_hint"),
+            edit_feed_url_title: get!(map, en, "edit_feed_url_title"),
 
             name_label: get!(map, en, "name_label"),
             url_label: get!(map, en, "url_label"),
@@ -364,6 +373,7 @@ impl Lang {
             tpl_filter_recent_days: get!(map, en, "filter_recent_days"),
             tpl_no_feed_found: get!(map, en, "no_feed_found"),
             tpl_refreshing_feed: get!(map, en, "refreshing_feed"),
+            tpl_mark_all_read_confirm: get!(map, en, "mark_all_read_confirm"),
         }
     }
 
@@ -411,6 +421,11 @@ impl Lang {
 
     pub fn refreshing_feed(&self, name: &str) -> String {
         self.tpl_refreshing_feed.replace("{name}", name)
+    }
+
+    pub fn mark_all_read_confirm(&self, count: usize) -> String {
+        self.tpl_mark_all_read_confirm
+            .replace("{count}", &count.to_string())
     }
 }
 
@@ -503,6 +518,10 @@ mod tests {
             "Feed saved: https://x.com"
         );
         assert_eq!(lang.invalid_url("bad"), "Invalid URL: bad");
+        assert_eq!(
+            lang.mark_all_read_confirm(12),
+            "Mark 12 entries as read? (y/N)"
+        );
         assert_eq!(
             lang.refreshed_summary(3, 42, 1),
             "Refreshed 3 feeds (42 entries, 1 errors)"
