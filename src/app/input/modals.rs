@@ -1,4 +1,4 @@
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent};
 
 use crate::app::App;
 use crate::app::actions::Action;
@@ -90,7 +90,7 @@ pub fn handle_input_mode(app: &mut App, key: KeyEvent) -> bool {
                 KeyCode::Char('u') => {
                     if let Some(url) = app.state.selected_feed_ref().map(|f| f.url.clone()) {
                         app.state.input_mode = InputMode::EditFeedUrl;
-                        app.state.input_buffer = url;
+                        app.state.input_buffer.set(url);
                     }
                 }
                 _ => {}
@@ -190,16 +190,11 @@ pub fn handle_input_mode(app: &mut App, key: KeyEvent) -> bool {
             let _ = app.dispatch(Action::ClearStatus);
             return true;
         }
-        KeyCode::Backspace => {
-            app.state.input_buffer.pop();
-        }
-        KeyCode::Char(c) => {
-            if key.modifiers.contains(KeyModifiers::CONTROL) {
+        _ => {
+            if !app.state.input_buffer.handle_key(key) {
                 return false;
             }
-            app.state.input_buffer.push(c);
         }
-        _ => {}
     }
 
     match &mode {
@@ -350,8 +345,7 @@ fn handle_manage_groups(app: &mut App, key: KeyEvent) -> bool {
         KeyCode::Char('r') => {
             if let Some(group) = app.state.groups.get(app.state.modal_selection) {
                 app.state.input_mode = InputMode::RenameGroup;
-                app.state.input_buffer.clear();
-                app.state.input_buffer.push_str(&group.name);
+                app.state.input_buffer.set(group.name.as_str());
                 let prompt = format!("{}{}", app.lang.rename_prompt, app.state.input_buffer);
                 let _ = app.dispatch(Action::SetStatus(prompt));
             }
@@ -410,13 +404,9 @@ fn handle_edit_feed_url(app: &mut App, key: KeyEvent) -> bool {
                 }
             }
         }
-        KeyCode::Backspace => {
-            app.state.input_buffer.pop();
+        _ => {
+            app.state.input_buffer.handle_key(key);
         }
-        KeyCode::Char(c) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
-            app.state.input_buffer.push(c);
-        }
-        _ => {}
     }
     false
 }
@@ -448,18 +438,12 @@ fn handle_group_text_input(app: &mut App, key: KeyEvent) -> bool {
             app.state.input_mode = InputMode::ManageGroups;
             let _ = app.dispatch(Action::SetStatus(app.lang.group_manage_hint.to_string()));
         }
-        KeyCode::Backspace => {
-            app.state.input_buffer.pop();
-            update_text_status(app, &mode);
+        KeyCode::Char(_) if app.state.input_buffer.len() >= MAX_GROUP_NAME_LEN => {}
+        _ => {
+            if app.state.input_buffer.handle_key(key) {
+                update_text_status(app, &mode);
+            }
         }
-        KeyCode::Char(c)
-            if !key.modifiers.contains(KeyModifiers::CONTROL)
-                && app.state.input_buffer.len() < MAX_GROUP_NAME_LEN =>
-        {
-            app.state.input_buffer.push(c);
-            update_text_status(app, &mode);
-        }
-        _ => {}
     }
     false
 }
@@ -699,7 +683,7 @@ mod tests {
     fn search_esc_cancels() {
         let mut app = test_app();
         app.state.input_mode = InputMode::PanelSearch;
-        app.state.input_buffer = "test".to_string();
+        app.state.input_buffer.set("test");
         let closed = handle_input_mode(&mut app, key(KeyCode::Esc));
         assert!(closed);
     }
@@ -719,7 +703,7 @@ mod tests {
     fn search_backspace_removes_char() {
         let mut app = test_app();
         app.state.input_mode = InputMode::PanelSearch;
-        app.state.input_buffer = "abc".to_string();
+        app.state.input_buffer.set("abc");
 
         handle_input_mode(&mut app, key(KeyCode::Backspace));
         assert_eq!(app.state.input_buffer, "ab");
@@ -933,7 +917,7 @@ mod tests {
     fn edit_feed_url_esc_returns_to_feed_info() {
         let mut app = app_with_selected_feed();
         app.state.input_mode = InputMode::EditFeedUrl;
-        app.state.input_buffer = "https://a.com/other".to_string();
+        app.state.input_buffer.set("https://a.com/other");
         let closed = handle_input_mode(&mut app, key(KeyCode::Esc));
         assert!(!closed);
         assert_eq!(app.state.input_mode, InputMode::FeedInfo);
@@ -944,7 +928,7 @@ mod tests {
     fn edit_feed_url_typing_edits_buffer() {
         let mut app = app_with_selected_feed();
         app.state.input_mode = InputMode::EditFeedUrl;
-        app.state.input_buffer = "https://a.com/fee".to_string();
+        app.state.input_buffer.set("https://a.com/fee");
         handle_input_mode(&mut app, key(KeyCode::Char('d')));
         assert_eq!(app.state.input_buffer, "https://a.com/feed");
         handle_input_mode(&mut app, key(KeyCode::Backspace));
@@ -953,10 +937,43 @@ mod tests {
     }
 
     #[test]
+    fn edit_feed_url_cursor_moves_and_edits_in_the_middle() {
+        let mut app = app_with_selected_feed();
+        app.state.input_mode = InputMode::FeedInfo;
+        handle_input_mode(&mut app, key(KeyCode::Char('u')));
+        assert_eq!(app.state.input_buffer.cursor(), "https://a.com/feed".len());
+
+        handle_input_mode(&mut app, key(KeyCode::Home));
+        for _ in 0.."https://".len() {
+            handle_input_mode(&mut app, key(KeyCode::Right));
+        }
+        handle_input_mode(&mut app, key(KeyCode::Delete));
+        handle_input_mode(&mut app, key(KeyCode::Char('b')));
+        handle_input_mode(&mut app, key(KeyCode::End));
+        handle_input_mode(&mut app, key(KeyCode::Left));
+        handle_input_mode(&mut app, key(KeyCode::Backspace));
+
+        assert_eq!(app.state.input_buffer, "https://b.com/fed");
+        assert_eq!(app.state.input_mode, InputMode::EditFeedUrl);
+    }
+
+    #[test]
+    fn edit_feed_url_modal_carries_cursor_position() {
+        let mut app = app_with_selected_feed();
+        app.state.input_mode = InputMode::EditFeedUrl;
+        app.state.input_buffer.set("https://a.com/feed");
+        app.state.input_buffer.move_home();
+        match current_modal(&app.state, &app.lang) {
+            Some(ui::Modal::Input { value, .. }) => assert_eq!(value.cursor(), 0),
+            other => panic!("expected input modal, got {}", other.is_some()),
+        }
+    }
+
+    #[test]
     fn edit_feed_url_enter_with_invalid_url_shows_error_and_stays_open() {
         let mut app = app_with_selected_feed();
         app.state.input_mode = InputMode::EditFeedUrl;
-        app.state.input_buffer = "not-a-url".to_string();
+        app.state.input_buffer.set("not-a-url");
         let closed = handle_input_mode(&mut app, key(KeyCode::Enter));
         assert!(!closed);
         assert_eq!(app.state.input_mode, InputMode::EditFeedUrl);
@@ -968,7 +985,7 @@ mod tests {
     fn edit_feed_url_enter_unchanged_returns_to_feed_info() {
         let mut app = app_with_selected_feed();
         app.state.input_mode = InputMode::EditFeedUrl;
-        app.state.input_buffer = "https://a.com/feed".to_string();
+        app.state.input_buffer.set("https://a.com/feed");
         let closed = handle_input_mode(&mut app, key(KeyCode::Enter));
         assert!(!closed);
         assert_eq!(app.state.input_mode, InputMode::FeedInfo);
@@ -978,7 +995,7 @@ mod tests {
     fn edit_feed_url_modal_shows_input_with_url() {
         let mut app = app_with_selected_feed();
         app.state.input_mode = InputMode::EditFeedUrl;
-        app.state.input_buffer = "https://a.com/feed".to_string();
+        app.state.input_buffer.set("https://a.com/feed");
         match current_modal(&app.state, &app.lang) {
             Some(ui::Modal::Input { title, value, .. }) => {
                 assert_eq!(title, app.lang.edit_feed_url_title);
@@ -1033,7 +1050,7 @@ mod tests {
         app.state.input_mode = InputMode::PanelSearch;
         app.state.panel_search_focus = Some(Focus::Feeds);
         app.state.feed_filter_query = Some("rust".to_string());
-        app.state.input_buffer = "rust".to_string();
+        app.state.input_buffer.set("rust");
 
         let closed = handle_input_mode(&mut app, key(KeyCode::Enter));
         assert!(closed);
@@ -1067,11 +1084,56 @@ mod tests {
     }
 
     #[test]
+    fn panel_search_inserts_at_cursor_and_updates_filter() {
+        let mut app = test_app();
+        app.state.input_mode = InputMode::PanelSearch;
+        app.state.panel_search_focus = Some(Focus::Feeds);
+        app.state.input_buffer.set("rst");
+
+        handle_input_mode(&mut app, key(KeyCode::Left));
+        handle_input_mode(&mut app, key(KeyCode::Left));
+        handle_input_mode(&mut app, key(KeyCode::Char('u')));
+        assert_eq!(app.state.feed_filter_query.as_deref(), Some("rust"));
+    }
+
+    #[test]
+    fn rename_feed_cursor_edits_in_the_middle() {
+        let mut app = app_with_selected_feed();
+        app.state.input_mode = InputMode::RenameFeed;
+        app.state.input_buffer.set("Feed");
+
+        handle_input_mode(&mut app, key(KeyCode::Home));
+        handle_input_mode(&mut app, key(KeyCode::Char('M')));
+        handle_input_mode(&mut app, key(KeyCode::Char('y')));
+        handle_input_mode(&mut app, key(KeyCode::Char(' ')));
+        assert_eq!(app.state.input_buffer, "My Feed");
+    }
+
+    #[test]
+    fn group_input_cursor_edits_and_respects_max_length() {
+        let mut app = test_app();
+        app.state.input_mode = InputMode::AddGroup;
+        app.state.input_buffer.set("Nws");
+
+        handle_input_mode(&mut app, key(KeyCode::Left));
+        handle_input_mode(&mut app, key(KeyCode::Left));
+        handle_input_mode(&mut app, key(KeyCode::Char('e')));
+        handle_input_mode(&mut app, key(KeyCode::Delete));
+        assert_eq!(app.state.input_buffer, "Nes");
+
+        app.state.input_buffer.set("x".repeat(MAX_GROUP_NAME_LEN));
+        handle_input_mode(&mut app, key(KeyCode::Home));
+        handle_input_mode(&mut app, key(KeyCode::Char('y')));
+        assert_eq!(app.state.input_buffer.len(), MAX_GROUP_NAME_LEN);
+        assert_eq!(app.state.input_buffer.cursor(), 0);
+    }
+
+    #[test]
     fn panel_search_backspace_clears_filter_when_empty() {
         let mut app = test_app();
         app.state.input_mode = InputMode::PanelSearch;
         app.state.panel_search_focus = Some(Focus::Feeds);
-        app.state.input_buffer = "r".to_string();
+        app.state.input_buffer.set("r");
         app.state.feed_filter_query = Some("r".to_string());
 
         handle_input_mode(&mut app, key(KeyCode::Backspace));

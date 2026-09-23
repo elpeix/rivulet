@@ -2,6 +2,7 @@ pub mod actions;
 pub mod events;
 pub mod input;
 pub mod state;
+pub mod text_input;
 
 use std::sync::Arc;
 use std::sync::mpsc::Receiver;

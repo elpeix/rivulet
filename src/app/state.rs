@@ -4,6 +4,7 @@ use std::time::Instant;
 use ratatui::layout::Rect;
 
 use crate::app::actions::Action;
+use crate::app::text_input::TextInput;
 use crate::fetch::discovery::DiscoveredFeed;
 use crate::store::models::{Entry, Feed, Group};
 use crate::ui::rich_text::LinkRegion;
@@ -136,7 +137,7 @@ pub struct AppState {
     pub sort_mode: SortMode,
     pub hide_read_feeds: bool,
     pub input_mode: InputMode,
-    pub input_buffer: String,
+    pub input_buffer: TextInput,
     pub selected_entries: HashSet<i64>,
     pub show_help: bool,
     pub help_scroll: u16,
@@ -203,7 +204,7 @@ impl Default for AppState {
             sort_mode: SortMode::DateDesc,
             hide_read_feeds: false,
             input_mode: InputMode::None,
-            input_buffer: String::new(),
+            input_buffer: TextInput::default(),
             selected_entries: HashSet::new(),
             show_help: false,
             help_scroll: 0,

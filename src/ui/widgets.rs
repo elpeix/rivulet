@@ -5,6 +5,7 @@ use ratatui::widgets::{Block, BorderType, Borders, List, ListItem, Paragraph, Wr
 use std::collections::HashSet;
 
 use crate::app::state::{AppState, FeedRow, StatusKind};
+use crate::app::text_input::TextInput;
 use crate::i18n::Lang;
 use crate::store::models::{Entry, Feed, Group};
 use crate::ui::rich_text::{LinkRegion, rich_lines_to_ratatui};
@@ -15,6 +16,16 @@ use unicode_width::UnicodeWidthStr;
 
 fn str_width(s: &str) -> usize {
     UnicodeWidthStr::width(s)
+}
+
+pub fn input_spans(input: &TextInput, theme: &Theme) -> Vec<Span<'static>> {
+    let (before, current, after) = input.split_at_cursor();
+    let cursor = current.map_or_else(|| "_".to_string(), String::from);
+    vec![
+        Span::raw(before.to_string()),
+        Span::styled(cursor, theme.highlight_style()),
+        Span::raw(after.to_string()),
+    ]
 }
 
 /// Split text into spans, highlighting case-insensitive matches of `query`.
@@ -827,6 +838,35 @@ fn truncate_with_ellipsis(s: &str, max: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn input_with_cursor(value: &str, cursor: usize) -> TextInput {
+        let mut input = TextInput::default();
+        input.set(value);
+        input.move_home();
+        for _ in 0..cursor {
+            input.move_right();
+        }
+        input
+    }
+
+    #[test]
+    fn input_spans_highlight_char_under_cursor() {
+        let theme = Theme::dark();
+        let spans = input_spans(&input_with_cursor("abc", 1), &theme);
+        let contents: Vec<&str> = spans.iter().map(|s| s.content.as_ref()).collect();
+        assert_eq!(contents, vec!["a", "b", "c"]);
+        assert_eq!(spans[1].style, theme.highlight_style());
+        assert_ne!(spans[0].style, theme.highlight_style());
+    }
+
+    #[test]
+    fn input_spans_show_placeholder_cursor_at_end() {
+        let theme = Theme::dark();
+        let spans = input_spans(&input_with_cursor("abc", 3), &theme);
+        let contents: Vec<&str> = spans.iter().map(|s| s.content.as_ref()).collect();
+        assert_eq!(contents, vec!["abc", "_", ""]);
+        assert_eq!(spans[1].style, theme.highlight_style());
+    }
 
     #[test]
     fn truncate_ascii_within_limit() {
