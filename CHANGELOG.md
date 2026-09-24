@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.6.1] - 2026-09-24
+
+### Fixed
+
+- **Text inputs could only be edited at the end**: The cursor was always at the end of the value, so fixing a typo in the middle of a feed URL meant erasing it entirely. All text inputs (add feed, rename feed, edit feed URL, category name and the `/` search bar) now support `←`/`→`, `Home`/`End`, `Delete` and `Backspace` at the cursor position, which is shown highlighted
+- **HTTP errors hid their real cause**: Only the outermost error was logged, so a body download timeout appeared as `error decoding response body`. The log and status bar now show the full cause chain (e.g. `error decoding response body: request or response body error: operation timed out`)
+- **Oversized feeds timed out mid-download**: Some feeds (e.g. a Blogger feed losing its `max-results` parameter on an `http` → `https` redirect) served tens of megabytes and failed every refresh with a confusing timeout. Downloads are now capped by the new `max_feed_size_mb` option in `config.toml` (default 10) and fail with `Feed exceeds the size limit of 10 MB`
+
 ## [1.6.0] - 2026-09-21
 
 ### Added
