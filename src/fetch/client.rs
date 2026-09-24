@@ -51,8 +51,22 @@ impl std::fmt::Display for FetchError {
 
 impl From<reqwest::Error> for FetchError {
     fn from(err: reqwest::Error) -> Self {
-        Self::Http(err.to_string())
+        Self::Http(error_chain(&err))
     }
+}
+
+fn error_chain(err: &dyn std::error::Error) -> String {
+    let mut message = err.to_string();
+    let mut source = err.source();
+    while let Some(cause) = source {
+        let cause_message = cause.to_string();
+        if !message.contains(&cause_message) {
+            message.push_str(": ");
+            message.push_str(&cause_message);
+        }
+        source = cause.source();
+    }
+    message
 }
 
 #[derive(Clone)]
@@ -66,7 +80,7 @@ impl HttpClient {
         let client = Client::builder()
             .timeout(options.timeout)
             .build()
-            .map_err(|e| FetchError::Http(e.to_string()))?;
+            .map_err(FetchError::from)?;
 
         Ok(Self {
             client,
@@ -143,5 +157,79 @@ impl HttpClient {
             etag,
             last_modified,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Debug)]
+    struct Layer {
+        message: &'static str,
+        source: Option<Box<Layer>>,
+    }
+
+    impl std::fmt::Display for Layer {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str(self.message)
+        }
+    }
+
+    impl std::error::Error for Layer {
+        fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+            self.source
+                .as_deref()
+                .map(|s| s as &(dyn std::error::Error + 'static))
+        }
+    }
+
+    fn layers(messages: &[&'static str]) -> Layer {
+        messages
+            .iter()
+            .rev()
+            .fold(None, |source, message| {
+                Some(Layer {
+                    message,
+                    source: source.map(Box::new),
+                })
+            })
+            .expect("at least one layer")
+    }
+
+    #[test]
+    fn error_chain_joins_all_sources() {
+        let error = layers(&[
+            "error decoding response body",
+            "request or response body error",
+            "operation timed out",
+        ]);
+        assert_eq!(
+            error_chain(&error),
+            "error decoding response body: request or response body error: operation timed out"
+        );
+    }
+
+    #[test]
+    fn error_chain_skips_sources_already_in_message() {
+        let error = layers(&["connect failed: refused", "refused"]);
+        assert_eq!(error_chain(&error), "connect failed: refused");
+    }
+
+    #[test]
+    fn fetch_error_from_reqwest_includes_cause() {
+        let error = Client::new()
+            .get("not a url")
+            .build()
+            .expect_err("invalid url");
+        let message = FetchError::from(error).to_string();
+        assert!(
+            message.starts_with("HTTP error: builder error: "),
+            "{message}"
+        );
+        assert!(
+            message.len() > "HTTP error: builder error: ".len(),
+            "{message}"
+        );
     }
 }
