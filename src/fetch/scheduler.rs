@@ -126,6 +126,7 @@ mod tests {
         HttpClient::new(FetchOptions {
             user_agent: "test/1.0".to_string(),
             timeout: std::time::Duration::from_secs(5),
+            ..FetchOptions::default()
         })
         .unwrap()
     }

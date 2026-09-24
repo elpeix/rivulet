@@ -223,6 +223,7 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io::Result<
         DbWorker::start(&db_path).map_err(|error| io::Error::other(format!("DB: {error:?}")))?;
     let fetch_options = FetchOptions {
         timeout: config.fetch_timeout(),
+        max_body_bytes: config.max_feed_size_bytes(),
         ..FetchOptions::default()
     };
     let mut app = App::new(db, lang, config.recent_days, fetch_options)

@@ -10,6 +10,7 @@ use reqwest::{Client, StatusCode};
 pub struct FetchOptions {
     pub user_agent: String,
     pub timeout: Duration,
+    pub max_body_bytes: usize,
 }
 
 impl Default for FetchOptions {
@@ -17,6 +18,7 @@ impl Default for FetchOptions {
         Self {
             user_agent: "rivulet/0.1".to_string(),
             timeout: Duration::from_secs(10),
+            max_body_bytes: 10 * 1024 * 1024,
         }
     }
 }
@@ -38,6 +40,7 @@ pub struct FetchResponse {
 pub enum FetchError {
     Http(String),
     Status(u16),
+    TooLarge(usize),
 }
 
 impl std::fmt::Display for FetchError {
@@ -45,6 +48,11 @@ impl std::fmt::Display for FetchError {
         match self {
             Self::Http(msg) => write!(f, "HTTP error: {msg}"),
             Self::Status(code) => write!(f, "HTTP status {code}"),
+            Self::TooLarge(limit) => write!(
+                f,
+                "Feed exceeds the size limit of {} MB",
+                limit / (1024 * 1024)
+            ),
         }
     }
 }
@@ -73,6 +81,7 @@ fn error_chain(err: &dyn std::error::Error) -> String {
 pub struct HttpClient {
     client: Client,
     user_agent: String,
+    max_body_bytes: usize,
 }
 
 impl HttpClient {
@@ -85,6 +94,7 @@ impl HttpClient {
         Ok(Self {
             client,
             user_agent: options.user_agent,
+            max_body_bytes: options.max_body_bytes,
         })
     }
 
@@ -151,9 +161,25 @@ impl HttpClient {
             return Err(FetchError::Status(status.as_u16()));
         }
 
-        let body = response.bytes().await?;
+        let limit = self.max_body_bytes;
+        if response
+            .content_length()
+            .is_some_and(|length| length > limit as u64)
+        {
+            return Err(FetchError::TooLarge(limit));
+        }
+
+        let mut response = response;
+        let mut body = bytes::BytesMut::new();
+        while let Some(chunk) = response.chunk().await? {
+            if body.len() + chunk.len() > limit {
+                return Err(FetchError::TooLarge(limit));
+            }
+            body.extend_from_slice(&chunk);
+        }
+
         Ok(FetchResponse {
-            body: Some(body),
+            body: Some(body.freeze()),
             etag,
             last_modified,
         })
@@ -214,6 +240,77 @@ mod tests {
     fn error_chain_skips_sources_already_in_message() {
         let error = layers(&["connect failed: refused", "refused"]);
         assert_eq!(error_chain(&error), "connect failed: refused");
+    }
+
+    fn serve_once(headers: &'static str, body_len: usize) -> String {
+        use std::io::{Read, Write};
+
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+        let addr = listener.local_addr().expect("addr");
+        std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept");
+            let mut request = Vec::new();
+            let mut buf = [0u8; 1024];
+            while !request.windows(4).any(|w| w == b"\r\n\r\n") {
+                match stream.read(&mut buf) {
+                    Ok(0) | Err(_) => return,
+                    Ok(n) => request.extend_from_slice(&buf[..n]),
+                }
+            }
+            let head = format!("HTTP/1.1 200 OK\r\nConnection: close\r\n{headers}\r\n");
+            let _ = stream.write_all(head.as_bytes());
+            let _ = stream.write_all(&vec![b'x'; body_len]);
+        });
+        format!("http://{addr}/feed.xml")
+    }
+
+    fn client_with_limit(max_body_bytes: usize) -> HttpClient {
+        HttpClient::new(FetchOptions {
+            max_body_bytes,
+            ..FetchOptions::default()
+        })
+        .expect("client")
+    }
+
+    #[test]
+    fn default_max_body_is_ten_megabytes() {
+        assert_eq!(FetchOptions::default().max_body_bytes, 10 * 1024 * 1024);
+    }
+
+    #[tokio::test]
+    async fn fetch_accepts_body_within_limit() {
+        let url = serve_once("Content-Length: 100\r\n", 100);
+        let response = client_with_limit(100)
+            .fetch(&url, None, None)
+            .await
+            .expect("fetch");
+        assert_eq!(response.body.expect("body").len(), 100);
+    }
+
+    #[tokio::test]
+    async fn fetch_rejects_declared_length_over_limit() {
+        let url = serve_once("Content-Length: 101\r\n", 101);
+        let error = client_with_limit(100)
+            .fetch(&url, None, None)
+            .await
+            .expect_err("too large");
+        assert!(matches!(error, FetchError::TooLarge(100)), "{error}");
+    }
+
+    #[tokio::test]
+    async fn fetch_rejects_streamed_body_over_limit() {
+        let url = serve_once("", 5000);
+        let error = client_with_limit(1000)
+            .fetch(&url, None, None)
+            .await
+            .expect_err("too large");
+        assert!(matches!(error, FetchError::TooLarge(1000)), "{error}");
+    }
+
+    #[test]
+    fn too_large_error_shows_limit_in_megabytes() {
+        let error = FetchError::TooLarge(10 * 1024 * 1024);
+        assert_eq!(error.to_string(), "Feed exceeds the size limit of 10 MB");
     }
 
     #[test]
