@@ -125,6 +125,7 @@ layout = "columns"      # or "split" for 2-column stacked layout
 theme = "terminal"      # "terminal", "dark", "light", or custom name
 hide_read_feeds = false  # hide feeds with no unread entries
 fetch_timeout_seconds = 30  # per-feed HTTP timeout (large feeds may need more)
+max_feed_size_mb = 10       # maximum download size per feed
 ```
 
 The config file is created automatically on first run.

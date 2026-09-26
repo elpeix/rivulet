@@ -29,6 +29,8 @@ pub struct Config {
     pub hide_read_feeds: bool,
     #[serde(default = "default_fetch_timeout_seconds")]
     pub fetch_timeout_seconds: u64,
+    #[serde(default = "default_max_feed_size_mb")]
+    pub max_feed_size_mb: u64,
 }
 
 fn default_layout() -> String {
@@ -55,6 +57,10 @@ fn default_fetch_timeout_seconds() -> u64 {
     30
 }
 
+fn default_max_feed_size_mb() -> u64 {
+    10
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -65,6 +71,7 @@ impl Default for Config {
             theme: default_theme(),
             hide_read_feeds: false,
             fetch_timeout_seconds: default_fetch_timeout_seconds(),
+            max_feed_size_mb: default_max_feed_size_mb(),
         }
     }
 }
@@ -122,6 +129,15 @@ impl Config {
             self.fetch_timeout_seconds
         };
         Duration::from_secs(seconds)
+    }
+
+    pub fn max_feed_size_bytes(&self) -> usize {
+        let megabytes = if self.max_feed_size_mb == 0 {
+            default_max_feed_size_mb()
+        } else {
+            self.max_feed_size_mb
+        };
+        usize::try_from(megabytes.saturating_mul(1024 * 1024)).unwrap_or(usize::MAX)
     }
 
     pub fn layout_mode(&self) -> LayoutMode {
@@ -223,5 +239,24 @@ mod tests {
     fn fetch_timeout_zero_falls_back_to_default() {
         let config: Config = toml::from_str("fetch_timeout_seconds = 0").unwrap();
         assert_eq!(config.fetch_timeout(), Duration::from_secs(30));
+    }
+
+    #[test]
+    fn max_feed_size_defaults_to_ten_megabytes() {
+        let config = Config::default();
+        assert_eq!(config.max_feed_size_mb, 10);
+        assert_eq!(config.max_feed_size_bytes(), 10 * 1024 * 1024);
+    }
+
+    #[test]
+    fn parse_max_feed_size_mb() {
+        let config: Config = toml::from_str("max_feed_size_mb = 25").unwrap();
+        assert_eq!(config.max_feed_size_bytes(), 25 * 1024 * 1024);
+    }
+
+    #[test]
+    fn max_feed_size_zero_falls_back_to_default() {
+        let config: Config = toml::from_str("max_feed_size_mb = 0").unwrap();
+        assert_eq!(config.max_feed_size_bytes(), 10 * 1024 * 1024);
     }
 }

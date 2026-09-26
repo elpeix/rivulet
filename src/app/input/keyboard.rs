@@ -421,10 +421,9 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
             if let Some(feed_id) = app.state.selected_feed {
                 if let Some(feed) = app.state.feeds.iter().find(|f| f.id == feed_id) {
                     app.state.input_mode = InputMode::RenameFeed;
-                    app.state.input_buffer.clear();
-                    if let Some(title) = feed.custom_title.as_deref() {
-                        app.state.input_buffer.push_str(title);
-                    }
+                    app.state
+                        .input_buffer
+                        .set(feed.custom_title.as_deref().unwrap_or_default());
                 }
             } else {
                 let _ = app.dispatch(Action::SetStatus(app.lang.no_feed_selected.to_string()));
@@ -930,7 +929,7 @@ mod tests {
     #[test]
     fn slash_clears_input_buffer() {
         let mut app = test_app();
-        app.state.input_buffer = "old query".to_string();
+        app.state.input_buffer.set("old query");
         handle_key(&mut app, key(KeyCode::Char('/')));
         assert!(app.state.input_buffer.is_empty());
     }

@@ -12,13 +12,15 @@ use ratatui::widgets::{
 };
 
 use crate::app::state::AppState;
+use crate::app::text_input::TextInput;
 use crate::fetch::discovery::DiscoveredFeed;
 use crate::i18n::Lang;
 use crate::ui::layout::{build_layout, centered_rect};
 use crate::ui::theme::Theme;
 use crate::ui::widgets::{
-    assign_group_modal_text, entries_list, feeds_list, manage_groups_modal_text, modal,
-    panel_block, preview_block, preview_parts, selected_entry, status_bar, status_bar_height,
+    assign_group_modal_text, entries_list, feeds_list, input_spans, manage_groups_modal_text,
+    modal, panel_block, preview_block, preview_parts, selected_entry, status_bar,
+    status_bar_height,
 };
 
 #[derive(Debug, Clone)]
@@ -26,7 +28,7 @@ pub enum Modal {
     Input {
         title: String,
         prompt: String,
-        value: String,
+        value: TextInput,
         hint: Option<String>,
     },
     Confirm {
@@ -44,7 +46,7 @@ pub enum Modal {
     },
     GroupInput {
         title: String,
-        value: String,
+        value: TextInput,
     },
     FeedInfo {
         title: String,
@@ -128,7 +130,14 @@ fn draw_feeds_panel(
     state.feeds_list_offset = feed_state.offset();
     if searching || has_filter {
         let query = state.feed_filter_query.as_deref().unwrap_or("");
-        render_search_bar(frame, theme, split[3], query, searching, None);
+        render_search_bar(
+            frame,
+            theme,
+            split[3],
+            query,
+            searching.then_some(&state.input_buffer),
+            None,
+        );
     }
 }
 
@@ -218,7 +227,14 @@ fn draw_entries_panel(
     }
     if searching || has_filter {
         let query = state.search_query.as_deref().unwrap_or("");
-        render_search_bar(frame, theme, split[3], query, searching, None);
+        render_search_bar(
+            frame,
+            theme,
+            split[3],
+            query,
+            searching.then_some(&state.input_buffer),
+            None,
+        );
     }
 }
 
@@ -341,7 +357,14 @@ fn draw_preview_panel(
         } else {
             None
         };
-        render_search_bar(frame, theme, split[3], query, searching, match_info);
+        render_search_bar(
+            frame,
+            theme,
+            split[3],
+            query,
+            searching.then_some(&state.input_buffer),
+            match_info,
+        );
     }
 }
 
@@ -361,8 +384,7 @@ fn draw_modal(
             value,
             hint,
         } => {
-            let cursor = Span::styled("_", theme.highlight_style());
-            let input_line = Line::from(vec![Span::raw(value), cursor]);
+            let input_line = Line::from(input_spans(&value, theme));
             let mut lines = vec![
                 Line::from(""),
                 Line::from(prompt),
@@ -394,8 +416,7 @@ fn draw_modal(
             frame.render_widget(modal(&lang.categories_title, text, theme), area);
         }
         Modal::GroupInput { title, value } => {
-            let cursor = Span::styled("_", theme.highlight_style());
-            let input_line = Line::from(vec![Span::raw(value), cursor]);
+            let input_line = Line::from(input_spans(&value, theme));
             let text = Text::from(vec![
                 Line::from(lang.name_label.as_str()),
                 input_line,
@@ -647,13 +668,13 @@ fn render_search_bar(
     theme: &Theme,
     area: Rect,
     query: &str,
-    is_typing: bool,
+    typing: Option<&TextInput>,
     match_info: Option<(usize, usize)>,
 ) {
     let mut spans = vec![Span::styled("/", Style::default().fg(theme.accent))];
-    spans.push(Span::raw(query.to_string()));
-    if is_typing {
-        spans.push(Span::styled("_", theme.highlight_style()));
+    match typing {
+        Some(input) => spans.extend(input_spans(input, theme)),
+        None => spans.push(Span::raw(query.to_string())),
     }
     if let Some((current, total)) = match_info {
         let info = if total == 0 {
